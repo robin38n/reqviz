@@ -5,6 +5,7 @@ import {
 	signal,
 	viewChild,
 } from "@angular/core";
+import { RouterLink } from "@angular/router";
 import { ApiService } from "../../api/api.service";
 import type { components } from "../../api/schema";
 
@@ -13,6 +14,7 @@ type SpecSummary = components["schemas"]["SpecSummary"];
 @Component({
 	selector: "app-upload",
 	standalone: true,
+	imports: [RouterLink],
 	template: `
     <div class="upload-container">
       <h1>RestAtlas</h1>
@@ -45,7 +47,7 @@ type SpecSummary = components["schemas"]["SpecSummary"];
             <span>{{ s.endpointCount }} endpoints</span>
             <span>{{ s.schemaCount }} schemas</span>
           </div>
-          <pre>ID: {{ s.id }}</pre>
+          <a [routerLink]="['/specs', s.id]" class="view-link">View Graph &rarr;</a>
         </div>
       }
     </div>
@@ -111,10 +113,18 @@ type SpecSummary = components["schemas"]["SpecSummary"];
       margin-top: 0.5rem;
       color: #555;
     }
-    pre {
-      margin-top: 0.5rem;
-      font-size: 0.75rem;
-      color: #888;
+    .view-link {
+      display: inline-block;
+      margin-top: 0.75rem;
+      padding: 0.5rem 1rem;
+      background: #333;
+      color: #fff;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 0.875rem;
+    }
+    .view-link:hover {
+      background: #555;
     }
   `,
 })

@@ -29,6 +29,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: true
               description: Raw OpenAPI spec as JSON
       responses:
         '201':
@@ -128,6 +129,7 @@ components:
           format: uuid
         raw:
           type: object
+          additionalProperties: true
           description: Original OpenAPI spec as JSON
         summary:
           $ref: '#/components/schemas/SpecSummary'

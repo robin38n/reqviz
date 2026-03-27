@@ -90,7 +90,9 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @description Original OpenAPI spec as JSON */
-            raw: Record<string, never>;
+            raw: {
+                [key: string]: unknown;
+            };
             summary: components["schemas"]["SpecSummary"];
         };
         ProxyRequest: {
@@ -165,7 +167,9 @@ export interface operations {
                     /** Format: uri */
                     url?: string;
                 };
-                "application/json": Record<string, never>;
+                "application/json": {
+                    [key: string]: unknown;
+                };
             };
         };
         responses: {
