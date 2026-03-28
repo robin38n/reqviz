@@ -32,6 +32,12 @@ export class ApiService {
 		return this.client.POST("/proxy", { body });
 	}
 
+	async getDemoSpec(slug: string): Promise<Record<string, unknown> | null> {
+		const res = await fetch(`/api/demos/${encodeURIComponent(slug)}`);
+		if (!res.ok) return null;
+		return res.json();
+	}
+
 	async listDemos(): Promise<{
 		data?: DemoInfo[];
 		error?: unknown;

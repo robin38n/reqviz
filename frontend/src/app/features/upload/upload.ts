@@ -29,20 +29,21 @@ const PLACEHOLDER_JSON = `{
 	imports: [RouterLink],
 	template: `
     <div class="upload-container">
-      <h1><img src="assets/icons/restatlas.svg" alt="" class="logo" /> RestAtlas</h1>
-      <p class="subtitle">Visual OpenAPI Explorer — paste a spec or upload a file to visualize your API as an interactive graph.</p>
+      <h1>Visual OpenAPI Explorer</h1>
+      <p class="subtitle">Paste a spec or upload a file to visualize your API as an interactive graph.</p>
 
       <div class="textarea-wrapper">
         <div class="textarea-toolbar">
           @if (demos().length > 0) {
-            <select class="demo-select" (change)="selectedDemoSlug.set($any($event.target).value)">
-              @for (d of demos(); track d.slug) {
-                <option [value]="d.slug" [selected]="d.slug === selectedDemoSlug()">{{ d.title }}</option>
-              }
-            </select>
-            <button class="use-example" (click)="loadDemo()" [disabled]="loading() || !selectedDemoSlug()">
-              Load Example
-            </button>
+            <span class="toolbar-label">Examples:</span>
+            @for (d of demos(); track d.slug) {
+              <button
+                class="demo-chip"
+                [class.active]="selectedDemoSlug() === d.slug"
+                (click)="selectDemo(d.slug)"
+                [disabled]="loadingDemo()"
+              >{{ d.title }}</button>
+            }
           }
         </div>
         <textarea
@@ -54,11 +55,13 @@ const PLACEHOLDER_JSON = `{
 
       <div class="actions">
         <label class="file-label">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 10v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-3"/><polyline points="5 6 8 3 11 6"/><line x1="8" y1="3" x2="8" y2="11"/></svg>
           Upload file
           <input type="file" accept=".json,.yaml,.yml" (change)="onFileSelect($event)" hidden />
         </label>
         <button class="primary-btn" (click)="submit()" [disabled]="loading()">
-          {{ loading() ? 'Uploading...' : 'Upload Spec' }}
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="10" y1="10" x2="14" y2="14"/></svg>
+          {{ loading() ? 'Analyzing...' : 'Visualize' }}
         </button>
       </div>
 
@@ -88,13 +91,6 @@ const PLACEHOLDER_JSON = `{
     h1 {
       font-size: 1.75rem;
       margin: 0 0 0.25rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .logo {
-      width: 32px;
-      height: 32px;
     }
     .subtitle {
       color: #555;
@@ -109,32 +105,37 @@ const PLACEHOLDER_JSON = `{
     }
     .textarea-toolbar {
       display: flex;
-      justify-content: flex-end;
+      align-items: center;
+      gap: 0.375rem;
       padding: 0.375rem 0.5rem;
       background: #f9fafb;
       border-bottom: 1px solid #e5e7eb;
     }
-    .demo-select {
-      font-size: 0.8rem;
-      padding: 0.125rem 0.375rem;
+    .toolbar-label {
+      font-size: 0.75rem;
+      color: #6b7280;
+      flex-shrink: 0;
+    }
+    .demo-chip {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
       border: 1px solid #d1d5db;
-      border-radius: 3px;
+      border-radius: 12px;
       background: #fff;
       color: #374151;
-    }
-    .use-example {
-      background: none;
-      border: none;
-      color: #2563eb;
-      font-size: 0.8rem;
       cursor: pointer;
-      padding: 0.125rem 0.375rem;
-      border-radius: 3px;
+      transition: all 0.15s;
     }
-    .use-example:hover {
-      background: #eff6ff;
+    .demo-chip:hover:not(:disabled) {
+      background: #f3f4f6;
+      border-color: #9ca3af;
     }
-    .use-example:disabled {
+    .demo-chip.active {
+      background: #1e293b;
+      color: #fff;
+      border-color: #1e293b;
+    }
+    .demo-chip:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
@@ -157,6 +158,9 @@ const PLACEHOLDER_JSON = `{
       margin-top: 0.75rem;
     }
     .primary-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
       padding: 0.5rem 1rem;
       border: 1px solid #333;
       border-radius: 4px;
@@ -170,6 +174,9 @@ const PLACEHOLDER_JSON = `{
       cursor: not-allowed;
     }
     .file-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
       padding: 0.5rem 1rem;
       border: 1px solid #d1d5db;
       border-radius: 4px;
@@ -231,6 +238,7 @@ export class UploadComponent {
 	specInput = viewChild.required<ElementRef<HTMLTextAreaElement>>("specInput");
 
 	loading = signal(false);
+	loadingDemo = signal(false);
 	error = signal<string | null>(null);
 	summary = signal<SpecSummary | null>(null);
 	demos = signal<DemoInfo[]>([]);
@@ -242,9 +250,33 @@ export class UploadComponent {
 		this.api.listDemos().then(({ data }) => {
 			if (data && data.length > 0) {
 				this.demos.set(data);
-				this.selectedDemoSlug.set(data[0].slug);
 			}
 		});
+	}
+
+	async selectDemo(slug: string) {
+		if (this.selectedDemoSlug() === slug) {
+			this.selectedDemoSlug.set("");
+			this.specInput().nativeElement.value = "";
+			this.autoResize();
+			return;
+		}
+
+		this.selectedDemoSlug.set(slug);
+		this.loadingDemo.set(true);
+
+		try {
+			const spec = await this.api.getDemoSpec(slug);
+			if (spec) {
+				const text = JSON.stringify(spec, null, 2);
+				this.specInput().nativeElement.value = text;
+				this.autoResize();
+			}
+		} catch {
+			this.error.set("Failed to load example spec");
+		} finally {
+			this.loadingDemo.set(false);
+		}
 	}
 
 	async onFileSelect(event: Event) {
@@ -254,6 +286,7 @@ export class UploadComponent {
 
 		const text = await file.text();
 		this.specInput().nativeElement.value = text;
+		this.selectedDemoSlug.set("");
 		this.autoResize();
 	}
 
@@ -261,28 +294,6 @@ export class UploadComponent {
 		const el = this.specInput().nativeElement;
 		el.style.height = "auto";
 		el.style.height = `${Math.min(el.scrollHeight, 500)}px`;
-	}
-
-	async loadDemo() {
-		const slug = this.selectedDemoSlug();
-		if (!slug) return;
-
-		this.error.set(null);
-		this.summary.set(null);
-		this.loading.set(true);
-
-		try {
-			const { data, error } = await this.api.loadDemo(slug);
-			if (error) {
-				this.error.set("Failed to load demo");
-			} else if (data) {
-				this.router.navigate(["/specs", data.id]);
-			}
-		} catch {
-			this.error.set("Network error — is the backend running?");
-		} finally {
-			this.loading.set(false);
-		}
 	}
 
 	async submit() {

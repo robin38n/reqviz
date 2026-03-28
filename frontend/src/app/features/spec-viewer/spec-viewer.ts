@@ -30,13 +30,15 @@ type GraphLayout = "structured" | "interactive";
       }
 
       @if (svc.error(); as err) {
-        <div class="error">{{ err }}</div>
+        <div class="error">
+          <p>{{ err }}</p>
+          <a routerLink="/" class="return-btn">Return to start</a>
+        </div>
       }
 
       @if (svc.summary(); as s) {
         <header>
-          <a routerLink="/" class="back">&larr; Upload</a>
-          <h1><img src="assets/icons/restatlas.svg" alt="" class="logo" /> {{ s.title }} <span class="version">v{{ s.version }}</span></h1>
+          <h1>{{ s.title }} <span class="version">v{{ s.version }}</span></h1>
           <div class="stats">
             <span class="stat">{{ svc.endpointNodes().length }} endpoints</span>
             <span class="stat">{{ svc.schemaNodes().length }} schemas</span>
@@ -123,26 +125,27 @@ type GraphLayout = "structured" | "interactive";
     }
     .status { color: #666; }
     .error {
-      padding: 0.75rem;
+      padding: 1.5rem;
       background: #fef2f2;
       color: #dc2626;
       border-radius: 4px;
+      text-align: center;
     }
-    .back {
-      color: #666;
+    .error p {
+      margin: 0 0 1rem;
+    }
+    .return-btn {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      background: #333;
+      color: #fff;
+      border-radius: 4px;
       text-decoration: none;
       font-size: 0.875rem;
     }
-    .back:hover { color: #333; }
+    .return-btn:hover { background: #555; }
     header h1 {
       margin: 0.5rem 0 0;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .logo {
-      width: 28px;
-      height: 28px;
     }
     .version {
       color: #666;

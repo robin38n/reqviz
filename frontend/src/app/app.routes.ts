@@ -10,4 +10,5 @@ export const routes: Routes = [
 				(m) => m.SpecViewerComponent,
 			),
 	},
+	{ path: "**", redirectTo: "" },
 ];

@@ -31,6 +31,7 @@ func main() {
 
 	// Extra routes not in the OpenAPI spec
 	r.Get("/api/demos", server.HandleDemoList)
+	r.Get("/api/demos/{slug}", server.HandleDemoSpec)
 	r.Post("/api/demos/{slug}", server.HandleDemoUpload)
 
 	log.Println("Server starting on :3000")
