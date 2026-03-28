@@ -184,14 +184,13 @@ export class GraphCanvasForceComponent {
 				};
 			}
 			const sc = n as SchemaNode;
-			const propText = `${sc.properties.length} props`;
 			return {
 				id: n.id,
 				type: "schema" as const,
 				label: sc.name,
-				sublabel: propText,
+				sublabel: "",
 				width: Math.max(120, sc.name.length * 8 + 24),
-				height: 44,
+				height: 30,
 				original: n,
 			};
 		});
@@ -320,38 +319,17 @@ export class GraphCanvasForceComponent {
 			.attr("stroke", SCHEMA_STROKE)
 			.attr("stroke-width", 1.5);
 
-		// Schema divider line (UML style: name above, props below)
-		schemaNodes
-			.append("line")
-			.attr("x1", 0)
-			.attr("y1", 24)
-			.attr("x2", (d) => nodeWidth(d))
-			.attr("y2", 24)
-			.attr("stroke", SCHEMA_STROKE)
-			.attr("stroke-width", 1);
-
 		// Schema name
 		schemaNodes
 			.append("text")
 			.text((d) => d.label)
 			.attr("x", (d) => nodeWidth(d) / 2)
-			.attr("y", 15)
+			.attr("y", (d) => nodeHeight(d) / 2)
 			.attr("text-anchor", "middle")
 			.attr("dominant-baseline", "central")
 			.attr("fill", "#1e293b")
 			.attr("font-size", 12)
 			.attr("font-weight", 700);
-
-		// Schema sublabel (prop count)
-		schemaNodes
-			.append("text")
-			.text((d) => d.sublabel)
-			.attr("x", (d) => nodeWidth(d) / 2)
-			.attr("y", 35)
-			.attr("text-anchor", "middle")
-			.attr("dominant-baseline", "central")
-			.attr("fill", "#64748b")
-			.attr("font-size", 10);
 
 		// Drag behavior
 		const drag = d3

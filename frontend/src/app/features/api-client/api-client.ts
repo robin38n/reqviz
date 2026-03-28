@@ -56,13 +56,13 @@ const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 			}
 
 			<!-- Headers -->
-			<details class="section" [open]="headers().length > 0">
-				<summary class="section-title">
+			<div class="section">
+				<div class="section-title">
 					Headers
 					@if (headers().length > 0) {
 						<span class="badge">{{ headers().length }}</span>
 					}
-				</summary>
+				</div>
 				<div class="headers-editor">
 					@for (h of headers(); track $index; let i = $index) {
 						<div class="header-row">
@@ -83,7 +83,7 @@ const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 					}
 					<button class="add-btn" (click)="addHeader()">+ Add Header</button>
 				</div>
-			</details>
+			</div>
 
 			<!-- Body -->
 			@if (showBody()) {
@@ -140,6 +140,8 @@ const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 			cursor: pointer;
 			color: #fff;
 			min-width: 5.5rem;
+			height: 2.15rem;
+			box-sizing: border-box;
 		}
 		.method-select[data-method="GET"] { background: #16a34a; border-color: #16a34a; }
 		.method-select[data-method="POST"] { background: #2563eb; border-color: #2563eb; }
@@ -155,6 +157,8 @@ const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 			font-size: 0.85rem;
 			font-family: monospace;
 			min-width: 0;
+			height: 2.15rem;
+			box-sizing: border-box;
 		}
 		.url-input:focus {
 			outline: none;
@@ -192,24 +196,9 @@ const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 			text-transform: uppercase;
 			letter-spacing: 0.05em;
 			margin-bottom: 0.5rem;
-			cursor: pointer;
 			display: flex;
 			align-items: center;
 			gap: 0.375rem;
-		}
-		summary.section-title {
-			list-style: none;
-		}
-		summary.section-title::-webkit-details-marker {
-			display: none;
-		}
-		summary.section-title::before {
-			content: '\\25B6';
-			font-size: 0.6rem;
-			transition: transform 0.15s;
-		}
-		details[open] > summary.section-title::before {
-			transform: rotate(90deg);
 		}
 		.badge {
 			font-size: 0.65rem;

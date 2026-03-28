@@ -68,7 +68,7 @@ function asRecord(v: unknown): Record<string, unknown> | null {
                 <h4>Parameters</h4>
                 <table class="params-table">
                   <thead>
-                    <tr><th>Name</th><th>In</th><th>Type</th><th>Req</th></tr>
+                    <tr><th>Name</th><th>In</th><th>Type</th><th>Required</th></tr>
                   </thead>
                   <tbody>
                     @for (p of endpointParams(); track p.name) {
@@ -124,7 +124,7 @@ function asRecord(v: unknown): Record<string, unknown> | null {
               <h4>Properties</h4>
               <table class="params-table">
                 <thead>
-                  <tr><th>Name</th><th>Type</th><th>Req</th></tr>
+                  <tr><th>Name</th><th>Type</th><th>Required</th></tr>
                 </thead>
                 <tbody>
                   @for (p of schemaProperties(); track p.name) {
@@ -512,9 +512,14 @@ export class NodeDetailComponent {
 		const g = this.svc.graph();
 		if (!g || !nodeId) return [];
 		const nodeMap = new Map(g.nodes.map((n) => [n.id, n]));
-		return edges.map((e) => {
-			const isSource = e.source === nodeId;
-			const otherId = isSource ? e.target : e.source;
+		const selected = nodeMap.get(nodeId);
+		// For schemas, only show incoming edges ("used by"), not outgoing ("uses")
+		const filtered =
+			selected?.type === "schema"
+				? edges.filter((e) => e.target === nodeId)
+				: edges;
+		return filtered.map((e) => {
+			const otherId = e.target === nodeId ? e.source : e.target;
 			const other = nodeMap.get(otherId);
 			return {
 				id: otherId,
