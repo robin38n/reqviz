@@ -29,6 +29,7 @@ export class ApiClientComponent {
 	readonly methods = METHODS;
 	readonly method = signal<string>("GET");
 	readonly url = signal("");
+	readonly urlError = signal("");
 	readonly headers = signal<Array<{ key: string; value: string }>>([]);
 	readonly body = signal("");
 
@@ -75,6 +76,18 @@ export class ApiClientComponent {
 	async sendRequest(): Promise<void> {
 		const reqUrl = this.url().trim();
 		if (!reqUrl) return;
+
+		try {
+			const parsed = new URL(reqUrl);
+			if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+				this.urlError.set("Only http:// and https:// URLs are allowed");
+				return;
+			}
+		} catch {
+			this.urlError.set("Invalid URL");
+			return;
+		}
+		this.urlError.set("");
 
 		const headers: Record<string, string> = {};
 		for (const h of this.headers()) {

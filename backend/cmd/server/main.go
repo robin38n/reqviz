@@ -2,7 +2,9 @@ package main
 
 import (
 	"log"
+	"net"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -27,8 +29,18 @@ func main() {
 	server := handler.NewServer(specStore)
 	handler.HandlerFromMuxWithBaseURL(server, r, "/api")
 
-	log.Println("Server starting on :3000")
-	if err := http.ListenAndServe(":3000", r); err != nil {
+	host := os.Getenv("HOST")
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+	addr := net.JoinHostPort(host, port)
+
+	log.Printf("Server starting on %s\n", addr)
+	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,7 +16,19 @@ import (
 	"github.com/robin38n/reqviz/backend/internal/store"
 )
 
-var proxyClient = &http.Client{Timeout: 30 * time.Second}
+var proxyClient = newSafeProxyClient()
+
+// dangerousOutboundHeaders are stripped from proxied requests to prevent
+// credential leakage and header spoofing.
+var dangerousOutboundHeaders = []string{
+	"Host",
+	"X-Forwarded-For",
+	"X-Forwarded-Host",
+	"X-Forwarded-Proto",
+	"X-Real-Ip",
+	"Cookie",
+	"Set-Cookie",
+}
 
 // Server implements the generated ServerInterface.
 type Server struct {
@@ -77,6 +88,8 @@ func (s *Server) GetSpec(w http.ResponseWriter, _ *http.Request, id openapi_type
 // ProxyRequest forwards an HTTP request to an external API and returns
 // the response. It blocks requests to private/internal IP ranges.
 func (s *Server) ProxyRequest(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB incoming limit
+
 	var req ProxyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
@@ -94,8 +107,15 @@ func (s *Server) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isPrivateHost(parsed.Hostname()) {
-		writeError(w, http.StatusForbidden, "requests to private/internal addresses are not allowed")
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		writeError(w, http.StatusBadRequest, "only http and https URLs are allowed")
+		return
+	}
+
+	// Defense-in-depth: pre-flight DNS check for a clear 403 on obvious cases.
+	// The safe dialer provides the real protection at connection time.
+	if _, err := resolveAndValidate(r.Context(), parsed.Hostname()); err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
 		return
 	}
 
@@ -120,6 +140,12 @@ func (s *Server) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 			outReq.Header.Set(k, v)
 		}
 	}
+
+	// Strip dangerous headers after user headers are applied.
+	for _, h := range dangerousOutboundHeaders {
+		outReq.Header.Del(h)
+	}
+
 	if outReq.Header.Get("User-Agent") == "" {
 		outReq.Header.Set("User-Agent", "ReqViz/0.1")
 	}
@@ -252,25 +278,6 @@ func flattenHeaders(h http.Header) map[string]string {
 	return flat
 }
 
-func isPrivateHost(host string) bool {
-	if host == "localhost" || host == "" {
-		return true
-	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return false
-	}
-	privateRanges := []string{
-		"127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "::1/128",
-	}
-	for _, cidr := range privateRanges {
-		_, network, _ := net.ParseCIDR(cidr)
-		if network.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

@@ -24,6 +24,10 @@
 		>{{ tryItOut.loading() ? 'Sending...' : 'Send' }}</button>
 	</div>
 
+	@if (urlError()) {
+		<div class="py-2 px-3 bg-red-50 text-red-600 rounded text-sm mb-4">{{ urlError() }}</div>
+	}
+
 	@if (tryItOut.error()) {
 		<div class="py-2 px-3 bg-red-50 text-red-600 rounded text-sm mb-4">{{ tryItOut.error() }}</div>
 	}
