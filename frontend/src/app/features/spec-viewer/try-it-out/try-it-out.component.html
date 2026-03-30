@@ -29,8 +29,8 @@
 						<label class="text-xs font-semibold text-gray-700 min-w-[80px] shrink-0">{{ p.name }} <span class="text-red-600">*</span></label>
 						<input
 							class="flex-1 py-1 px-2 border border-gray-300 rounded font-mono text-[0.8rem] focus:outline-none focus:border-blue-600"
-							[placeholder]="p.schema?.['format'] ?? p.name"
-							[value]="pathValues()[p.name]"
+							[placeholder]="p.schema?.['format'] ?? 'undefined'"
+							[value]="pathValues()[p.name] ?? ''"
 							(input)="updatePathParam(p.name, $event)"
 						/>
 					</div>
@@ -61,8 +61,8 @@
 						} @else {
 							<input
 								class="flex-1 py-1 px-2 border border-gray-300 rounded font-mono text-[0.8rem] focus:outline-none focus:border-blue-600"
-								[placeholder]="p.name"
-								[value]="queryValues()[p.name]"
+								placeholder="undefined"
+								[value]="queryValues()[p.name] ?? ''"
 								(input)="updateQueryParam(p.name, $event)"
 							/>
 						}
@@ -80,8 +80,8 @@
 						<label class="text-xs font-semibold text-gray-700 min-w-[80px] shrink-0">{{ p.name }}</label>
 						<input
 							class="flex-1 py-1 px-2 border border-gray-300 rounded font-mono text-[0.8rem] focus:outline-none focus:border-blue-600"
-							[placeholder]="p.name"
-							[value]="headerValues()[p.name]"
+							placeholder="undefined"
+							[value]="headerValues()[p.name] ?? ''"
 							(input)="updateHeaderParam(p.name, $event)"
 						/>
 					</div>
