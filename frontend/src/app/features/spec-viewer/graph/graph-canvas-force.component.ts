@@ -77,16 +77,18 @@ export class GraphCanvasForceComponent {
 		null,
 		undefined
 	> | null = null;
+	private initialized = false;
 
 	constructor() {
 		afterNextRender(() => {
+			this.initialized = true;
 			this.initGraph();
 		});
 
 		// Re-render when graph input changes after initial render
 		effect(() => {
 			const g = this.graph();
-			if (this.simulation && g) {
+			if (this.initialized && g) {
 				this.initGraph();
 			}
 		});

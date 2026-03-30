@@ -30,7 +30,7 @@
 						<input
 							class="flex-1 py-1 px-2 border border-gray-300 rounded font-mono text-[0.8rem] focus:outline-none focus:border-blue-600"
 							[placeholder]="p.schema?.['format'] ?? 'undefined'"
-							[value]="pathValues()[p.name] ?? ''"
+							[value]="pathValues()[p.name] || ''"
 							(input)="updatePathParam(p.name, $event)"
 						/>
 					</div>
@@ -62,7 +62,7 @@
 							<input
 								class="flex-1 py-1 px-2 border border-gray-300 rounded font-mono text-[0.8rem] focus:outline-none focus:border-blue-600"
 								placeholder="undefined"
-								[value]="queryValues()[p.name] ?? ''"
+								[value]="queryValues()[p.name] || ''"
 								(input)="updateQueryParam(p.name, $event)"
 							/>
 						}
@@ -81,7 +81,7 @@
 						<input
 							class="flex-1 py-1 px-2 border border-gray-300 rounded font-mono text-[0.8rem] focus:outline-none focus:border-blue-600"
 							placeholder="undefined"
-							[value]="headerValues()[p.name] ?? ''"
+							[value]="headerValues()[p.name] || ''"
 							(input)="updateHeaderParam(p.name, $event)"
 						/>
 					</div>
