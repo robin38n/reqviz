@@ -6,33 +6,38 @@ import {
 	type Signal,
 	signal,
 } from "@angular/core";
-import { Router } from "@angular/router";
 import { dig } from "../../../core/utils/dig";
 import { asRecord } from "../../../core/utils/record-helpers";
 import {
 	extractContentRefs,
 	schemaType,
 } from "../../../core/utils/schema-helpers";
-import type { EndpointNode, SchemaNode } from "../../../models/graph.model";
+import type {
+	EndpointNode,
+	GraphNode,
+	SchemaNode,
+} from "../../../models/graph.model";
 import { MethodBadgeComponent } from "../../../shared/components/method-badge/method-badge.component";
-import { StatusBadgeComponent } from "../../../shared/components/status-badge/status-badge.component";
 import { SpecGraphService } from "../services/spec-graph.service";
 import { TryItOutComponent } from "../try-it-out/try-it-out.component";
 
 @Component({
 	selector: "app-endpoint-detail",
-	imports: [TryItOutComponent, MethodBadgeComponent, StatusBadgeComponent],
+	imports: [TryItOutComponent, MethodBadgeComponent],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	templateUrl: "./endpoint-detail.component.html",
 })
 export class EndpointDetailComponent {
-	private readonly router = inject(Router);
-	private readonly svc = inject(SpecGraphService);
+	protected readonly svc = inject(SpecGraphService);
 	readonly activeTab = signal<"details" | "try-it">("details");
+	readonly copied = signal(false);
+
+	asEndpoint(node: GraphNode | null): EndpointNode | null {
+		return node?.type === "endpoint" ? (node as EndpointNode) : null;
+	}
 
 	readonly endpoint = computed((): EndpointNode | null => {
-		const node = this.svc.selectedNode();
-		return node?.type === "endpoint" ? (node as EndpointNode) : null;
+		return this.asEndpoint(this.svc.selectedNode());
 	});
 
 	private readonly rawOperation: Signal<Record<string, unknown> | null> =
@@ -64,8 +69,9 @@ export class EndpointDetailComponent {
 
 	readonly requestBodySchemas = computed(() => {
 		const op = this.rawOperation();
-		if (!op) return [];
-		return extractContentRefs(asRecord(op.requestBody));
+		if (!op) return null;
+		const schemas = extractContentRefs(asRecord(op.requestBody));
+		return schemas.length > 0 ? { refs: schemas } : null;
 	});
 
 	readonly responseEntries = computed(() => {
@@ -73,18 +79,17 @@ export class EndpointDetailComponent {
 		if (!op) return [];
 		const responses = asRecord(op.responses);
 		if (!responses) return [];
-		return Object.entries(responses).map(([status, respDef]) => {
+		return Object.entries(responses).map(([code, respDef]) => {
 			const resp = asRecord(respDef);
 			return {
-				status,
-				statusGroup: status.charAt(0),
+				code,
 				description: resp ? String(resp.description ?? "") : "",
-				schemas: extractContentRefs(resp),
+				refs: extractContentRefs(resp),
 			};
 		});
 	});
 
-	readonly connectedNodes = computed(() => {
+	readonly connections = computed(() => {
 		const edges = this.svc.selectedNodeEdges();
 		const nodeId = this.svc.selectedNodeId();
 		const g = this.svc.graph();
@@ -106,23 +111,12 @@ export class EndpointDetailComponent {
 		});
 	});
 
-	private readonly baseUrl = computed(() => {
-		const raw = this.svc.rawSpec();
-		const servers = dig(raw, "servers");
-		if (!Array.isArray(servers) || servers.length === 0) return "";
-		const first = asRecord(servers[0]);
-		return first ? String(first.url ?? "") : "";
-	});
-
-	openInApiClient(): void {
-		const ep = this.endpoint();
-		if (!ep) return;
-		this.router.navigate(["/api-client"], {
-			state: {
-				method: ep.method,
-				url: `${this.baseUrl()}${ep.path}`,
-			},
-		});
+	copyLink(): void {
+		const url = new URL(window.location.href);
+		url.searchParams.set("node", this.svc.selectedNodeId() || "");
+		navigator.clipboard.writeText(url.toString());
+		this.copied.set(true);
+		setTimeout(() => this.copied.set(false), 2000);
 	}
 
 	navigateTo(nodeId: string): void {

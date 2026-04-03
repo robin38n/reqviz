@@ -1,3 +1,80 @@
-/* You can add global styles to this file, and also import other style files */
-
+/* biome-ignore-all lint/style/noUnknownAtRule: Tailwind 4 syntax */
 @import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Surface Colors */
+  --color-app-bg: var(--bg-app);
+  --color-app-surface: var(--bg-surface);
+  --color-app-surface-hover: var(--bg-surface-hover);
+  --color-app-border: var(--border-base);
+  
+  /* Text Colors */
+  --color-app-text: var(--text-base);
+  --color-app-text-muted: var(--text-muted);
+  --color-app-text-inv: var(--text-inverted);
+  
+  /* Primary Action */
+  --color-app-primary: var(--bg-primary);
+  --color-app-primary-hover: var(--bg-primary-hover);
+}
+
+@layer base {
+  :root {
+    /* Light Mode (Grays) */
+    --bg-app: #ffffff;
+    --bg-surface: #f9fafb;
+    --bg-surface-hover: #f3f4f6;
+    --border-base: #e5e7eb;
+    
+    --text-base: #111827;
+    --text-muted: #6b7280;
+    --text-inverted: #ffffff;
+    
+    --bg-primary: #18181b;
+    --bg-primary-hover: #27272a;
+
+    /* Graph specific aliases for consistency */
+    --graph-text: var(--text-base);
+    --graph-text-sub: var(--text-muted);
+    --graph-edge-req: #2563eb;
+    --graph-edge-res-2xx: #16a34a;
+    --graph-edge-res-4xx: #ef4444;
+    --graph-edge-res-5xx: #991b1b;
+    --graph-edge-param: #6366f1;
+    --graph-edge-prop: #94a3b8;
+    --graph-schema-fill: var(--bg-surface);
+    --graph-schema-stroke: #94a3b8;
+    --graph-endpoint-text: #ffffff;
+  }
+
+  .dark {
+    /* Dark Mode (Grayish - Brighter) */
+    --bg-app: #18181b; /* Zinc 900 */
+    --bg-surface: #27272a; /* Zinc 800 */
+    --bg-surface-hover: #323238; /* Slightly lighter than surface, but more subtle than zinc-700 */
+    --border-base: #2d2d33; /* Subtle border for dark mode */
+    
+    --text-base: #f4f4f5; /* Zinc 100 */
+    --text-muted: #a1a1aa; /* Zinc 400 */
+    --text-inverted: #18181b;
+    
+    --bg-primary: #f4f4f5; /* Zinc 100 */
+    --bg-primary-hover: #ffffff;
+
+    /* Graph overrides for dark */
+    --graph-edge-req: #60a5fa;
+    --graph-edge-res-2xx: #4ade80;
+    --graph-edge-res-4xx: #f87171;
+    --graph-edge-res-5xx: #f87171;
+    --graph-edge-param: #818cf8;
+    --graph-edge-prop: #52525b;
+    --graph-schema-fill: #27272a;
+    --graph-schema-stroke: #52525b;
+  }
+
+  body {
+    @apply bg-app-bg text-app-text transition-colors duration-200;
+  }
+}
