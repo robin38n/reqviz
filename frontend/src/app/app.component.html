@@ -5,7 +5,7 @@
 		<span class="font-bold text-lg">ReqViz</span>
 	</a>
 	<div class="flex items-center gap-4 ml-auto">
-		<a routerLink="/" routerLinkActive="!text-app-text !font-semibold" [routerLinkActiveOptions]="{ exact: true }"
+		<a [routerLink]="explorerLink()" routerLinkActive="!text-app-text !font-semibold" [routerLinkActiveOptions]="{ exact: true }"
 			class="text-sm text-app-text-muted no-underline px-2 py-1 rounded transition-colors hover:text-app-text hover:bg-app-surface-hover">Explorer</a>
 		<a routerLink="/api-client" routerLinkActive="!text-app-text !font-semibold"
 			class="text-sm text-app-text-muted no-underline px-2 py-1 rounded transition-colors hover:text-app-text hover:bg-app-surface-hover">API Client</a>

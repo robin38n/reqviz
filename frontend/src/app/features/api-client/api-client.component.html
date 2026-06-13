@@ -2,6 +2,29 @@
 	<h1 class="text-2xl font-bold mb-1"><span class="bg-clip-text text-transparent bg-gradient-to-r from-app-text to-app-text-muted">API Client</span></h1>
 	<p class="text-app-text-muted text-sm mb-6">Send HTTP requests to any API endpoint.</p>
 
+	<!-- Endpoints from the spec loaded in the Explorer (cached for this session) -->
+	@if (specGraph.endpointNodes().length > 0) {
+		<details class="mb-6 bg-app-surface/80 backdrop-blur-md border border-app-border rounded-xl shadow-sm group" open>
+			<summary class="flex items-center gap-2 px-4 py-3 cursor-pointer list-none">
+				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-open:rotate-90 text-app-text-muted shrink-0"><title>Toggle</title><polyline points="9 18 15 12 9 6"/></svg>
+				<span class="text-sm font-semibold text-app-text">{{ specGraph.summary()?.title }}</span>
+				<span class="text-xs text-app-text-muted">— Endpoints ({{ specGraph.endpointNodes().length }})</span>
+			</summary>
+			<div class="px-3 pb-3 max-h-[260px] overflow-y-auto">
+				@for (ep of specGraph.endpointNodes(); track ep.id) {
+					<button
+						type="button"
+						class="w-full flex items-center gap-2 py-1.5 px-2 rounded text-left cursor-pointer mb-0.5 hover:bg-app-surface-hover transition-colors"
+						(click)="loadEndpoint(ep)"
+					>
+						<app-method-badge [method]="ep.method" size="xs" />
+						<span class="font-mono text-[0.8rem] text-app-text overflow-hidden text-ellipsis whitespace-nowrap min-w-0">{{ ep.path }}</span>
+					</button>
+				}
+			</div>
+		</details>
+	}
+
 	<div class="w-full bg-app-surface/80 backdrop-blur-md border border-app-border rounded-xl shadow-2xl p-6 relative z-10 transition-all mb-8">
 		<!-- URL Bar -->
 		<div class="flex items-center gap-2 mb-6">
@@ -19,37 +42,22 @@
 			/>
 			<button
 				type="button"
-				class="py-2 px-5 h-[2.5rem] bg-blue-600 text-white border border-blue-500 rounded-lg cursor-pointer text-sm font-semibold shrink-0 shadow-lg shadow-blue-500/20 hover:bg-blue-500 hover:-translate-y-0.5 hover:shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+				appButton
+				class="py-2 px-5 h-[2.5rem] text-sm shrink-0"
 				(click)="sendRequest()"
 				[disabled]="tryItOut.loading() || !url()"
 			>{{ tryItOut.loading() ? 'Sending...' : 'Send Request' }}</button>
 		</div>
 
 		@if (urlError()) {
-			<div class="p-4 bg-app-surface/80 backdrop-blur-md border border-red-500/30 rounded-lg text-sm mb-4 flex items-start gap-3 shadow-lg shadow-red-500/5 animate-in fade-in slide-in-from-top-2 duration-300">
-				<div class="flex items-center justify-center size-8 rounded-full bg-red-500/10 shrink-0 mt-px">
-					<svg aria-hidden="true" class="size-4 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-					</svg>
-				</div>
-				<div class="flex-1 min-w-0">
-					<p class="text-xs font-semibold uppercase tracking-wider text-red-500 dark:text-red-400 mb-0.5">Invalid URL</p>
-					<p class="m-0 text-app-text leading-relaxed">{{ urlError() }}</p>
-				</div>
+			<div class="mb-4">
+				<app-alert title="Invalid URL" [message]="urlError()" />
 			</div>
 		}
 
 		@if (tryItOut.error()) {
-			<div class="p-4 bg-app-surface/80 backdrop-blur-md border border-red-500/30 rounded-lg text-sm mb-4 flex items-start gap-3 shadow-lg shadow-red-500/5 animate-in fade-in slide-in-from-top-2 duration-300">
-				<div class="flex items-center justify-center size-8 rounded-full bg-red-500/10 shrink-0 mt-px">
-					<svg aria-hidden="true" class="size-4 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-					</svg>
-				</div>
-				<div class="flex-1 min-w-0">
-					<p class="text-xs font-semibold uppercase tracking-wider text-red-500 dark:text-red-400 mb-0.5">Request Failed</p>
-					<p class="m-0 text-app-text leading-relaxed">{{ tryItOut.error() }}</p>
-				</div>
+			<div class="mb-4">
+				<app-alert title="Request Failed" [message]="tryItOut.error()" />
 			</div>
 		}
 
@@ -79,7 +87,7 @@
 						<button type="button" class="bg-transparent border-none text-app-text-muted cursor-pointer text-lg px-2 leading-none hover:text-red-500 transition-colors" (click)="removeHeader(i)" title="Remove header">&times;</button>
 					</div>
 				}
-				<button type="button" class="bg-app-bg border border-dashed border-app-border rounded-md py-1.5 px-3 text-xs font-medium text-app-text-muted cursor-pointer self-start hover:bg-app-surface hover:border-app-text-muted/40 transition-all mt-1" (click)="addHeader()">+ Add Header</button>
+				<button type="button" appButton="secondary" class="py-1.5 px-3 text-xs border-dashed self-start mt-1" (click)="addHeader()">+ Add Header</button>
 			</div>
 		</div>
 
@@ -108,3 +116,5 @@
 	<!-- History -->
 	<app-request-history (replayRequest)="onReplayRequest($event)" />
 </div>
+
+<app-approval-dialog [(open)]="showApprovalDialog" [hosts]="specGraph.allowedHosts()" (confirm)="onApprovalConfirmed()" />

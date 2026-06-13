@@ -28,6 +28,19 @@ export class SpecGraphService {
 	readonly selectedTags = signal<Set<string>>(new Set());
 	readonly selectedMethods = signal<Set<string>>(new Set());
 
+	// Spec-viewer view preferences (persist across navigation within a session)
+	readonly layout = signal<"structured" | "interactive">("interactive");
+	readonly listSearch = signal("");
+	readonly listSort = signal("az");
+
+	// Base URL from the spec's first server entry, used to build full request URLs.
+	readonly serverBaseUrl = computed(() => {
+		const servers = this.rawSpec()?.servers;
+		if (!Array.isArray(servers) || servers.length === 0) return "";
+		const first = servers[0] as Record<string, unknown>;
+		return typeof first?.url === "string" ? first.url : "";
+	});
+
 	readonly approved = computed(() => this.summary()?.approved ?? false);
 	readonly allowedHosts = computed(() => this.summary()?.allowedHosts ?? []);
 
@@ -164,12 +177,14 @@ export class SpecGraphService {
 		try {
 			const { data, error } = await this.api.approveSpec(id, hosts);
 			if (error || !data) {
-				this.error.set("Failed to approve spec");
+				this.error.set("Could not approve this spec. Please try again.");
 				return;
 			}
 			this.summary.set(data);
 		} catch {
-			this.error.set("Network error during approval");
+			this.error.set(
+				"Couldn't reach the server while approving. Please try again.",
+			);
 		}
 	}
 
@@ -182,7 +197,7 @@ export class SpecGraphService {
 		try {
 			const { data, error } = await this.api.getSpec(id);
 			if (error) {
-				this.error.set("Failed to load spec");
+				this.error.set("Could not load this spec.");
 				return;
 			}
 			if (data) {
@@ -197,7 +212,7 @@ export class SpecGraphService {
 				}
 			}
 		} catch {
-			this.error.set("Network error — is the backend running?");
+			this.error.set("Couldn't reach the server — is the backend running?");
 		} finally {
 			this.loading.set(false);
 		}

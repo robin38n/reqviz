@@ -16,6 +16,7 @@ import {
         <input
           type="text"
           [placeholder]="placeholder()"
+          [value]="searchValue()"
           class="w-full py-1.5 pl-2 pr-2 border border-app-border rounded text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all bg-app-bg text-app-text"
           (input)="onSearch($event)"
         />
@@ -70,6 +71,7 @@ import {
 })
 export class ListToolbarComponent {
 	readonly placeholder = input("Search...");
+	readonly searchValue = input("");
 	readonly sortOptions = input<{ value: string; label: string }[]>([]);
 	readonly activeSort = input<string>("az");
 

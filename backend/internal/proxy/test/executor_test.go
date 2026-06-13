@@ -140,7 +140,7 @@ func TestExecutor_Execute_OversizedResponse(t *testing.T) {
 	if res.Status != http.StatusBadGateway {
 		t.Errorf("expected 502, got %d", res.Status)
 	}
-	if !strings.Contains(fmt.Sprint(res.Body), "byte limit") {
-		t.Errorf("expected body to mention byte limit, got %v", res.Body)
+	if !strings.Contains(fmt.Sprint(res.Body), "too large") {
+		t.Errorf("expected body to mention the response being too large, got %v", res.Body)
 	}
 }

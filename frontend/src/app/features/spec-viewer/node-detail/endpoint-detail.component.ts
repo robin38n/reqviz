@@ -17,6 +17,7 @@ import type {
 	GraphNode,
 	SchemaNode,
 } from "../../../models/graph.model";
+import { ApprovalDialogComponent } from "../../../shared/components/approval-dialog/approval-dialog.component";
 import { MethodBadgeComponent } from "../../../shared/components/method-badge/method-badge.component";
 import { RequestHistoryComponent } from "../../../shared/components/request-history/request-history.component";
 import { SpecGraphService } from "../services/spec-graph.service";
@@ -24,7 +25,12 @@ import { TryItOutComponent } from "../try-it-out/try-it-out.component";
 
 @Component({
 	selector: "app-endpoint-detail",
-	imports: [TryItOutComponent, MethodBadgeComponent, RequestHistoryComponent],
+	imports: [
+		TryItOutComponent,
+		MethodBadgeComponent,
+		RequestHistoryComponent,
+		ApprovalDialogComponent,
+	],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	templateUrl: "./endpoint-detail.component.html",
 })
@@ -37,12 +43,7 @@ export class EndpointDetailComponent {
 		this.showApprovalDialog.set(true);
 	}
 
-	cancelApproval(): void {
-		this.showApprovalDialog.set(false);
-	}
-
 	async confirmApproval(): Promise<void> {
-		this.showApprovalDialog.set(false);
 		await this.svc.approve();
 	}
 

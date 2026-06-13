@@ -50,7 +50,7 @@ export class TryItOutService {
 			);
 			if (error) {
 				const msg = (error as { error?: string })?.error;
-				this.error.set(msg ?? "Proxy request failed");
+				this.error.set(msg ?? "The request could not be completed.");
 				return;
 			}
 			const response = data as unknown as ProxyResponse;
@@ -64,8 +64,8 @@ export class TryItOutService {
 				},
 				...h,
 			]);
-		} catch (e) {
-			this.error.set(e instanceof Error ? e.message : "Unknown error");
+		} catch {
+			this.error.set("Could not reach the ReqViz server.");
 		} finally {
 			this.loading.set(false);
 		}

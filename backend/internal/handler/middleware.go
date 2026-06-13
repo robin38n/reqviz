@@ -42,7 +42,7 @@ func Chain(mws ...middleware) middleware {
 func OriginAllowed(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !originAllowed(r) {
-			writeError(w, http.StatusForbidden, "origin not allowed")
+			writeError(w, http.StatusForbidden, "This request came from an unexpected origin and was blocked.")
 			return
 		}
 		next.ServeHTTP(w, r)

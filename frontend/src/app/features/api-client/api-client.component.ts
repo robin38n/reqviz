@@ -6,39 +6,62 @@ import {
 	signal,
 } from "@angular/core";
 import { Router } from "@angular/router";
+import type { EndpointNode } from "../../models/graph.model";
+import { AlertComponent } from "../../shared/components/alert/alert.component";
+import { ApprovalDialogComponent } from "../../shared/components/approval-dialog/approval-dialog.component";
+import { MethodBadgeComponent } from "../../shared/components/method-badge/method-badge.component";
 import { RequestHistoryComponent } from "../../shared/components/request-history/request-history.component";
 import { ResponseViewerComponent } from "../../shared/components/response-viewer/response-viewer.component";
+import { ButtonDirective } from "../../shared/directives/button.directive";
 import { SpecGraphService } from "../spec-viewer/services/spec-graph.service";
 import {
 	type HistoryEntry,
 	type ProxyRequest,
 	TryItOutService,
 } from "../spec-viewer/services/try-it-out.service";
+import { ApiClientStateService } from "./api-client-state.service";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 
 @Component({
 	selector: "app-api-client",
-	imports: [ResponseViewerComponent, RequestHistoryComponent],
+	imports: [
+		ResponseViewerComponent,
+		RequestHistoryComponent,
+		MethodBadgeComponent,
+		AlertComponent,
+		ButtonDirective,
+		ApprovalDialogComponent,
+	],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	templateUrl: "./api-client.component.html",
 })
 export class ApiClientComponent {
 	private readonly router = inject(Router);
 	protected readonly tryItOut = inject(TryItOutService);
-	private readonly specGraph = inject(SpecGraphService);
+	protected readonly specGraph = inject(SpecGraphService);
+	protected readonly state = inject(ApiClientStateService);
 
 	readonly methods = METHODS;
-	readonly method = signal<string>("GET");
-	readonly url = signal("");
+	// Form state lives in ApiClientStateService so it survives navigation.
+	readonly method = this.state.method;
+	readonly url = this.state.url;
+	readonly headers = this.state.headers;
+	readonly body = this.state.body;
 	readonly urlError = signal("");
-	readonly headers = signal<Array<{ key: string; value: string }>>([]);
-	readonly body = signal("");
+	readonly showApprovalDialog = signal(false);
 
 	readonly showBody = computed(() => {
 		const m = this.method();
 		return m === "POST" || m === "PUT" || m === "PATCH";
 	});
+
+	/** Fill the request form from a spec endpoint (method + full URL). */
+	loadEndpoint(ep: EndpointNode): void {
+		this.method.set(ep.method);
+		this.url.set(`${this.specGraph.serverBaseUrl()}${ep.path}`);
+		this.urlError.set("");
+	}
 
 	constructor() {
 		const state = this.router.getCurrentNavigation()?.extras?.state;
@@ -82,14 +105,21 @@ export class ApiClientComponent {
 		try {
 			const parsed = new URL(reqUrl);
 			if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-				this.urlError.set("Only http:// and https:// URLs are allowed");
+				this.urlError.set("Only http:// and https:// URLs are allowed.");
 				return;
 			}
 		} catch {
-			this.urlError.set("Invalid URL");
+			this.urlError.set("Enter a valid URL starting with http:// or https://.");
 			return;
 		}
 		this.urlError.set("");
+
+		// A loaded spec must be approved before the proxy will forward requests.
+		// Prompt for approval instead of letting the backend reject it.
+		if (this.specGraph.specId() && !this.specGraph.approved()) {
+			this.showApprovalDialog.set(true);
+			return;
+		}
 
 		const headers: Record<string, string> = {};
 		for (const h of this.headers()) {
@@ -121,6 +151,14 @@ export class ApiClientComponent {
 			body: hasBody && bodyPayload != null ? bodyPayload : undefined,
 			specId: this.specGraph.specId() ?? undefined,
 		});
+	}
+
+	/** Approve the loaded spec, then retry the send the user originally clicked. */
+	async onApprovalConfirmed(): Promise<void> {
+		await this.specGraph.approve();
+		if (this.specGraph.approved()) {
+			await this.sendRequest();
+		}
 	}
 
 	onReplayRequest(entry: HistoryEntry): void {

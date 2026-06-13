@@ -74,7 +74,7 @@ func (s *Server) LoadDemo(w http.ResponseWriter, _ *http.Request, slug string) {
 	summary, err := s.parseAndStoreSpec(entry.Spec)
 	if err != nil {
 		slog.Default().Error("demo spec failed validation", "slug", slug, "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "Could not load the demo spec. Please try again.")
 		return
 	}
 

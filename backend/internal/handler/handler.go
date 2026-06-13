@@ -37,7 +37,7 @@ func (s *Server) HealthCheck(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) UploadSpec(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20)) // 10 MB limit
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "failed to read body")
+		writeError(w, http.StatusBadRequest, "Could not read the request body.")
 		return
 	}
 
@@ -50,7 +50,7 @@ func (s *Server) UploadSpec(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid JSON or YAML format")
+		writeError(w, http.StatusBadRequest, "The spec couldn't be parsed. Make sure it's valid JSON or YAML.")
 		return
 	}
 
@@ -60,7 +60,7 @@ func (s *Server) UploadSpec(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetSpec(w http.ResponseWriter, _ *http.Request, id openapi_types.UUID) {
 	stored, err := s.store.Get(id)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, NotFound{strPtr("spec not found")})
+		writeJSON(w, http.StatusNotFound, NotFound{strPtr("Spec not found. It may have expired, or the server was restarted.")})
 		return
 	}
 
@@ -85,7 +85,7 @@ func (s *Server) GetSpec(w http.ResponseWriter, _ *http.Request, id openapi_type
 func (s *Server) ApproveSpec(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	stored, err := s.store.Get(id)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, NotFound{strPtr("spec not found")})
+		writeJSON(w, http.StatusNotFound, NotFound{strPtr("Spec not found. It may have expired, or the server was restarted.")})
 		return
 	}
 
@@ -96,7 +96,7 @@ func (s *Server) ApproveSpec(w http.ResponseWriter, r *http.Request, id openapi_
 		if req.AllowedHosts != nil && len(*req.AllowedHosts) > 0 {
 			for _, h := range *req.AllowedHosts {
 				if !proxy.IsValidPublicHost(h) {
-					writeError(w, http.StatusBadRequest, "invalid host in allowedHosts")
+					writeError(w, http.StatusBadRequest, "One of the listed hosts is not a valid public hostname.")
 					return
 				}
 			}
@@ -106,7 +106,7 @@ func (s *Server) ApproveSpec(w http.ResponseWriter, r *http.Request, id openapi_
 
 	updated, err := s.store.Approve(id, hosts)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, NotFound{strPtr("spec not found")})
+		writeJSON(w, http.StatusNotFound, NotFound{strPtr("Spec not found. It may have expired, or the server was restarted.")})
 		return
 	}
 
@@ -136,42 +136,42 @@ func (s *Server) proxyRequestCore(w http.ResponseWriter, r *http.Request) {
 	var req ProxyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		slog.Default().Error("proxy: decode request body", "error", err)
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "The request body is not valid JSON.")
 		return
 	}
 
 	if !req.Method.Valid() {
-		writeError(w, http.StatusBadRequest, "invalid HTTP method")
+		writeError(w, http.StatusBadRequest, "That HTTP method isn't supported.")
 		return
 	}
 
 	if len(req.Url) > 2048 {
-		writeError(w, http.StatusBadRequest, "invalid URL: too long")
+		writeError(w, http.StatusBadRequest, "The URL is too long (max 2048 characters).")
 		return
 	}
 	parsed, err := url.Parse(req.Url)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		writeError(w, http.StatusBadRequest, "invalid URL: only http and https are allowed")
+		writeError(w, http.StatusBadRequest, "Only http:// and https:// URLs are allowed.")
 		return
 	}
 	if parsed.User != nil {
-		writeError(w, http.StatusBadRequest, "invalid URL: embedded credentials are not allowed")
+		writeError(w, http.StatusBadRequest, "URLs with embedded credentials (user:pass@) aren't allowed.")
 		return
 	}
 
 	stored, err := s.store.Get(req.SpecId)
 	if err != nil {
-		writeError(w, http.StatusForbidden, "unknown spec")
+		writeError(w, http.StatusForbidden, "No approved spec is loaded for this request. Open a spec in the Explorer and approve it first.")
 		return
 	}
 	if !stored.Approved {
-		writeError(w, http.StatusForbidden, "spec not approved — please approve before sending requests")
+		writeError(w, http.StatusForbidden, "This spec hasn't been approved yet. Approve it before sending requests.")
 		return
 	}
 
 	for name, value := range derefHeaders(req.Headers) {
 		if !proxy.ValidHeaderName(name) || !proxy.ValidHeaderValue(value) {
-			writeError(w, http.StatusBadRequest, "invalid request header")
+			writeError(w, http.StatusBadRequest, "A request header has an invalid name or value.")
 			return
 		}
 	}
@@ -189,14 +189,19 @@ func (s *Server) proxyRequestCore(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, proxy.ErrHostNotAllowed):
-			writeError(w, http.StatusForbidden, err.Error())
+			writeError(w, http.StatusForbidden, "This host isn't in the spec's approved list. You can only call the hosts you approved for this spec.")
 		case errors.Is(err, proxy.ErrRateLimited):
-			writeError(w, http.StatusTooManyRequests, err.Error())
+			writeError(w, http.StatusTooManyRequests, "Too many requests to this host. Wait a few seconds and try again.")
 		case errors.Is(err, proxy.ErrSSRFBlocked):
-			writeError(w, http.StatusForbidden, err.Error())
+			// Log the real reason; never reveal the SSRF check internals to the client.
+			slog.Default().Warn("proxy: request blocked", "error", err)
+			writeError(w, http.StatusForbidden, "That address can't be reached. ReqViz only allows requests to public internet hosts, not local or private networks.")
+		case errors.Is(err, proxy.ErrBadRequest):
+			slog.Default().Warn("proxy: bad request", "error", err)
+			writeError(w, http.StatusBadRequest, "The request couldn't be built. Check the URL, method, and body.")
 		default:
 			slog.Default().Error("proxy: internal error", "error", err)
-			writeError(w, http.StatusInternalServerError, "internal error")
+			writeError(w, http.StatusInternalServerError, "Something went wrong while sending the request.")
 		}
 		return
 	}

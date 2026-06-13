@@ -4,7 +4,6 @@ import {
 	computed,
 	inject,
 	type OnInit,
-	signal,
 } from "@angular/core";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import type {
@@ -14,13 +13,12 @@ import type {
 } from "../../models/graph.model";
 import { ListToolbarComponent } from "../../shared/components/list-toolbar/list-toolbar.component";
 import { MethodBadgeComponent } from "../../shared/components/method-badge/method-badge.component";
+import { ButtonDirective } from "../../shared/directives/button.directive";
 import { GraphCanvasComponent } from "./graph/graph-canvas.component";
 import { GraphCanvasForceComponent } from "./graph/graph-canvas-force.component";
 import { GraphToolbarComponent } from "./graph/graph-toolbar.component";
 import { NodeDetailComponent } from "./node-detail/node-detail.component";
 import { SpecGraphService } from "./services/spec-graph.service";
-
-type GraphLayout = "structured" | "interactive";
 
 @Component({
 	selector: "app-spec-viewer",
@@ -32,6 +30,7 @@ type GraphLayout = "structured" | "interactive";
 		MethodBadgeComponent,
 		NodeDetailComponent,
 		ListToolbarComponent,
+		ButtonDirective,
 	],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	templateUrl: "./spec-viewer.component.html",
@@ -39,11 +38,6 @@ type GraphLayout = "structured" | "interactive";
 export class SpecViewerComponent implements OnInit {
 	protected readonly svc = inject(SpecGraphService);
 	private readonly route = inject(ActivatedRoute);
-	protected readonly layout = signal<GraphLayout>("interactive");
-
-	// Local list state
-	protected readonly listSearch = signal("");
-	protected readonly listSort = signal("az");
 
 	protected readonly displayGraph = computed(
 		() => this.svc.filteredGraph() ?? this.svc.graph(),
@@ -65,8 +59,8 @@ export class SpecViewerComponent implements OnInit {
 
 	protected readonly localEndpoints = computed(() => {
 		let items = this.filteredEndpoints();
-		const query = this.listSearch().toLowerCase().trim();
-		const sort = this.listSort();
+		const query = this.svc.listSearch().toLowerCase().trim();
+		const sort = this.svc.listSort();
 
 		if (query) {
 			items = items.filter(
@@ -86,8 +80,8 @@ export class SpecViewerComponent implements OnInit {
 
 	protected readonly localSchemas = computed(() => {
 		let items = this.filteredSchemas();
-		const query = this.listSearch().toLowerCase().trim();
-		const sort = this.listSort();
+		const query = this.svc.listSearch().toLowerCase().trim();
+		const sort = this.svc.listSort();
 
 		if (query) {
 			items = items.filter((sc) => sc.name.toLowerCase().includes(query));

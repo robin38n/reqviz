@@ -1,39 +1,39 @@
+import { DecimalPipe } from "@angular/common";
 import {
 	ChangeDetectionStrategy,
 	Component,
-	type ElementRef,
 	inject,
 	signal,
-	viewChild,
 } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { ApiService } from "../../core/api.service";
 import type { components } from "../../core/schema";
 import { ThemeService } from "../../core/theme.service";
+import { AlertComponent } from "../../shared/components/alert/alert.component";
+import { ButtonDirective } from "../../shared/directives/button.directive";
+import { type SpecSummary, UploadStateService } from "./upload-state.service";
 
-type SpecSummaryRaw = components["schemas"]["SpecSummary"];
-type SpecSummary = SpecSummaryRaw & { endpoints?: number; schemas?: number };
 type DemoInfo = components["schemas"]["DemoInfo"];
-
-import { DecimalPipe } from "@angular/common";
 
 @Component({
 	selector: "app-upload",
-	imports: [RouterLink, DecimalPipe],
+	imports: [RouterLink, DecimalPipe, AlertComponent, ButtonDirective],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	templateUrl: "./upload.component.html",
 })
 export class UploadComponent {
 	private readonly api = inject(ApiService);
 	protected readonly theme = inject(ThemeService);
+	protected readonly state = inject(UploadStateService);
 
-	readonly input = viewChild.required<ElementRef<HTMLTextAreaElement>>("input");
+	// Draft, demo selection, and result persist across navigation via the service.
+	readonly draft = this.state.draft;
+	readonly summary = this.state.summary;
+	readonly selectedDemoSlug = this.state.selectedDemoSlug;
 
 	readonly loading = signal(false);
 	readonly error = signal<string | null>(null);
-	readonly summary = signal<SpecSummary | null>(null);
 	readonly demos = signal<DemoInfo[]>([]);
-	readonly selectedDemoSlug = signal("");
 
 	constructor() {
 		this.api.listDemos().then(({ data }) => {
@@ -48,10 +48,10 @@ export class UploadComponent {
 		try {
 			const { data } = await this.api.getDemoSpec(slug);
 			if (data) {
-				this.input().nativeElement.value = JSON.stringify(data, null, 2);
+				this.draft.set(JSON.stringify(data, null, 2));
 			}
 		} catch {
-			this.error.set("Failed to load demo");
+			this.error.set("Could not load the demo. Please try again.");
 		}
 	}
 
@@ -59,12 +59,12 @@ export class UploadComponent {
 		const input = event.target as HTMLInputElement;
 		const file = input.files?.[0];
 		if (!file) return;
-		this.input().nativeElement.value = await file.text();
+		this.draft.set(await file.text());
 	}
 
 	async visualize() {
 		this.error.set(null);
-		const text = this.input().nativeElement.value.trim();
+		const text = this.draft().trim();
 		if (!text) return;
 
 		this.loading.set(true);
@@ -74,7 +74,7 @@ export class UploadComponent {
 				text.startsWith("{") ? "application/json" : "application/x-yaml",
 			);
 			if (error) {
-				this.error.set(error.error || "Upload failed");
+				this.error.set(error.error || "Upload failed. Please try again.");
 			} else if (data) {
 				const s = data as SpecSummary;
 				s.endpoints = data.endpointCount;
@@ -82,7 +82,7 @@ export class UploadComponent {
 				this.summary.set(s);
 			}
 		} catch {
-			this.error.set("Network error");
+			this.error.set("Couldn't reach the server.");
 		} finally {
 			this.loading.set(false);
 		}

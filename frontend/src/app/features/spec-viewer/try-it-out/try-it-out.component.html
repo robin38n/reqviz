@@ -8,20 +8,16 @@
 		/>
 		<button
 			type="button"
+			appButton
 			(click)="sendRequest()"
-			class="py-1.5 px-3 bg-blue-600 text-white border border-blue-500 rounded cursor-pointer text-[0.8rem] font-semibold shrink-0 shadow-sm hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+			class="py-1.5 px-3 text-[0.8rem] shrink-0"
 			[disabled]="!canSend()"
 		>{{ tryItOut.loading() ? '...' : 'Send' }}</button>
 	</div>
 
 	@if (tryItOut.error()) {
-		<div class="p-2.5 bg-app-surface/80 backdrop-blur-md border border-red-500/30 rounded-lg text-[0.8rem] mb-2 flex items-center gap-2.5 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-			<div class="flex items-center justify-center size-6 rounded-full bg-red-500/10 shrink-0">
-				<svg aria-hidden="true" class="size-3.5 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-				</svg>
-			</div>
-			<span class="text-app-text">{{ tryItOut.error() }}</span>
+		<div class="mb-2">
+			<app-alert [compact]="true" [message]="tryItOut.error()" />
 		</div>
 	}
 

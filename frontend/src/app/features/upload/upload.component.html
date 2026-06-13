@@ -20,7 +20,7 @@
 
 			<!-- Editor Section -->
 			<div class="flex flex-col gap-4 h-full">
-				<textarea #input (input)="0"
+				<textarea [value]="draft()" (input)="draft.set($any($event.target).value)"
 					class="flex-1 w-full min-h-[370px] p-5 font-mono text-sm leading-relaxed border border-app-border rounded-lg shadow-inner focus:outline-none focus:border-app-text-muted resize-none bg-app-bg text-app-text transition-colors placeholder:text-app-text-muted/60"
 					placeholder="Paste a JSON or YAML OpenAPI spec, e.g.:
 
@@ -72,8 +72,8 @@ paths: ..."></textarea>
 						<input type="file" class="hidden" (change)="onFileSelected($event)" accept=".json,.yaml,.yml" />
 					</label>
 
-					<button type="button" (click)="visualize()"
-						class="relative flex items-center justify-center gap-2 py-3 px-4 rounded-lg cursor-pointer bg-blue-600 text-white font-semibold shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-500 hover:-translate-y-0.5 hover:shadow-blue-500/30 active:translate-y-0 border border-blue-500"
+					<button type="button" appButton (click)="visualize()"
+						class="relative py-3 px-4"
 						[disabled]="loading()">
 						@if (loading()) {
 						<svg aria-hidden="true" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
@@ -96,26 +96,7 @@ paths: ..."></textarea>
 				</div>
 
 				@if (error()) {
-				<div
-					class="group p-4 bg-app-surface/80 backdrop-blur-md border border-red-500/30 rounded-lg text-sm flex items-start gap-3 shadow-lg shadow-red-500/5 animate-in fade-in slide-in-from-top-2 duration-300">
-					<div class="flex items-center justify-center size-8 rounded-full bg-red-500/10 shrink-0 mt-px">
-						<svg aria-hidden="true" class="size-4 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24"
-							stroke="currentColor">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-								d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-						</svg>
-					</div>
-					<div class="flex-1 min-w-0">
-						<p class="text-xs font-semibold uppercase tracking-wider text-red-500 dark:text-red-400 mb-0.5">Error</p>
-						<p class="m-0 text-app-text leading-relaxed">{{ error() }}</p>
-					</div>
-					<button type="button" (click)="error.set(null)"
-						class="p-1 rounded-md bg-transparent border-none text-app-text-muted hover:text-app-text hover:bg-app-surface-hover cursor-pointer transition-colors opacity-0 group-hover:opacity-100">
-						<svg aria-hidden="true" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-						</svg>
-					</button>
-				</div>
+				<app-alert title="Error" [message]="error()" [dismissible]="true" (dismiss)="error.set(null)" />
 				}
 
 				@if (summary(); as s) {

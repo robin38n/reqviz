@@ -121,13 +121,15 @@ func (e *Executor) Execute(ctx context.Context, in Input) (Result, error) {
 	durationMs := int(time.Since(start).Milliseconds())
 
 	if err != nil {
+		// Log the real transport error; show the user a safe, generic message
+		// (the raw error can contain resolved IPs and Go internals).
 		e.Logger.Warn("proxy",
 			"method", in.Method, "host", host, "spec_id", in.SpecID,
 			"origin", in.Origin, "duration_ms", durationMs, "error", err.Error())
 		return Result{
 			Status:     0,
 			Headers:    map[string]string{},
-			Body:       "Network error: " + err.Error(),
+			Body:       "Could not connect to the target server. It may be offline, refusing connections, or unreachable.",
 			DurationMs: durationMs,
 		}, nil
 	}
@@ -145,17 +147,18 @@ func (e *Executor) Execute(ctx context.Context, in Input) (Result, error) {
 		return Result{
 			Status:     resp.StatusCode,
 			Headers:    headers,
-			Body:       "<binary or disallowed content-type: " + ct + ">",
+			Body:       "This response isn't displayable (binary or unsupported content type).",
 			DurationMs: durationMs,
 		}, nil
 	}
 
 	respBody, truncated, err := ReadBodyWithCap(resp.Body, MaxResponseBytes)
 	if err != nil {
+		e.Logger.Warn("proxy: read response body", "host", host, "spec_id", in.SpecID, "error", err.Error())
 		return Result{
 			Status:     resp.StatusCode,
 			Headers:    headers,
-			Body:       "Error reading response body: " + err.Error(),
+			Body:       "The response could not be read.",
 			DurationMs: durationMs,
 		}, nil
 	}
@@ -163,7 +166,7 @@ func (e *Executor) Execute(ctx context.Context, in Input) (Result, error) {
 		return Result{
 			Status:     http.StatusBadGateway,
 			Headers:    headers,
-			Body:       fmt.Sprintf("upstream response exceeded %d byte limit", MaxResponseBytes),
+			Body:       "The response is too large to display (over 5 MB).",
 			DurationMs: durationMs,
 		}, nil
 	}

@@ -9,7 +9,9 @@ import {
 import { dig } from "../../../core/utils/dig";
 import { asRecord } from "../../../core/utils/record-helpers";
 import type { EndpointNode } from "../../../models/graph.model";
+import { AlertComponent } from "../../../shared/components/alert/alert.component";
 import { ResponseViewerComponent } from "../../../shared/components/response-viewer/response-viewer.component";
+import { ButtonDirective } from "../../../shared/directives/button.directive";
 import { SpecGraphService } from "../services/spec-graph.service";
 import {
 	type ProxyRequest,
@@ -19,7 +21,12 @@ import { SchemaFormComponent } from "./schema-form.component";
 
 @Component({
 	selector: "app-try-it-out",
-	imports: [SchemaFormComponent, ResponseViewerComponent],
+	imports: [
+		SchemaFormComponent,
+		ResponseViewerComponent,
+		AlertComponent,
+		ButtonDirective,
+	],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	templateUrl: "./try-it-out.component.html",
 })
@@ -94,14 +101,7 @@ export class TryItOutComponent {
 			}
 		}
 
-		const raw = this.svc.rawSpec();
-		const servers = dig(raw, "servers");
-		const base =
-			Array.isArray(servers) && servers.length > 0
-				? asRecord(servers[0])?.url || ""
-				: "";
-
-		let url = `${base}${path}`;
+		let url = `${this.svc.serverBaseUrl()}${path}`;
 
 		const qp = this.queryParams();
 		const enabled = this.enabledParameters();
