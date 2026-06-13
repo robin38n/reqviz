@@ -62,6 +62,26 @@ export class TryItOutComponent {
 		this.parameters().filter((p) => p.in === "header"),
 	);
 
+	// True when the request is ready to send: not in flight and every required
+	// path/query/header parameter has a value.
+	readonly canSend = computed(() => {
+		if (this.tryItOut.loading()) return false;
+
+		const pathVals = this.pathParams();
+		for (const p of this.pathParameters()) {
+			if (p.required !== false && !pathVals[p.name]) return false;
+		}
+		const queryVals = this.queryParams();
+		for (const p of this.queryParameters()) {
+			if (p.required && !queryVals[p.name]) return false;
+		}
+		const headerVals = this.headerParams();
+		for (const p of this.headerParameters()) {
+			if (p.required && !headerVals[p.name]) return false;
+		}
+		return true;
+	});
+
 	readonly url = computed(() => {
 		const override = this.urlOverride();
 		if (override !== null) return override;
