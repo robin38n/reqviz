@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"slices"
 	"syscall"
 	"time"
 )
@@ -51,8 +52,8 @@ func ResolveAndValidate(ctx context.Context, host string) ([]net.IP, error) {
 	}
 
 	if ip := net.ParseIP(host); ip != nil {
-		if isPrivateIP(ip) {
-			return nil, fmt.Errorf("requests to private/internal addresses are not allowed")
+		if err := ValidateIPs([]net.IP{ip}); err != nil {
+			return nil, err
 		}
 		return []net.IP{ip}, nil
 	}
@@ -64,12 +65,20 @@ func ResolveAndValidate(ctx context.Context, host string) ([]net.IP, error) {
 	if len(ips) == 0 {
 		return nil, fmt.Errorf("DNS resolution returned no addresses")
 	}
-	for _, ip := range ips {
-		if isPrivateIP(ip) {
-			return nil, fmt.Errorf("requests to private/internal addresses are not allowed")
-		}
+	if err := ValidateIPs(ips); err != nil {
+		return nil, err
 	}
 	return ips, nil
+}
+
+// ValidateIPs returns an error if any of ips is a private/internal address. It is
+// the shared SSRF check applied to both literal and DNS-resolved hosts, so a
+// hostname that resolves to a private IP (DNS rebinding) is rejected fail-closed.
+func ValidateIPs(ips []net.IP) error {
+	if slices.ContainsFunc(ips, isPrivateIP) {
+		return fmt.Errorf("requests to private/internal addresses are not allowed")
+	}
+	return nil
 }
 
 func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -89,21 +98,30 @@ func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error
 	dialer := &net.Dialer{
 		Timeout: 10 * time.Second,
 		Control: func(_, address string, _ syscall.RawConn) error {
-			h, _, err := net.SplitHostPort(address)
-			if err != nil {
-				return err
-			}
-			ip := net.ParseIP(h)
-			if ip == nil || isPrivateIP(ip) {
-				return fmt.Errorf("connection to disallowed address blocked: %s", address)
-			}
-			return nil
+			return ValidateConnAddr(address)
 		},
 	}
 	return dialer.DialContext(ctx, network, addr)
 }
 
-func safeCheckRedirect(req *http.Request, via []*http.Request) error {
+// ValidateConnAddr reports whether a resolved "ip:port" is safe to connect to.
+// It is the SSRF backstop the dialer's Control hook runs on every Happy-Eyeballs
+// candidate, before the connect syscall.
+func ValidateConnAddr(address string) error {
+	h, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	ip := net.ParseIP(h)
+	if ip == nil || isPrivateIP(ip) {
+		return fmt.Errorf("connection to disallowed address blocked: %s", address)
+	}
+	return nil
+}
+
+// SafeCheckRedirect is the http.Client CheckRedirect hook: it caps redirect hops,
+// rejects non-http(s) schemes, and re-runs the SSRF validation on every redirect target.
+func SafeCheckRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 {
 		return fmt.Errorf("too many redirects (max 10)")
 	}

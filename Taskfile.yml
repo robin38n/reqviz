@@ -37,6 +37,11 @@ tasks:
     dir: backend
     cmd: go test ./...
 
+  test:net:
+    desc: Run gated live network tests (confirms Happy Eyeballs dual-stack dialing)
+    dir: backend
+    cmd: REQVIZ_NET_TEST=1 go test ./internal/proxy/... -run HappyEyeballs -v
+
   lint:
     deps: [lint:frontend, lint:backend]
 

@@ -17,6 +17,6 @@ func NewSafeClient() *http.Client {
 			ResponseHeaderTimeout:  15 * time.Second,
 			MaxResponseHeaderBytes: 64 << 10,
 		},
-		CheckRedirect: safeCheckRedirect,
+		CheckRedirect: SafeCheckRedirect,
 	}
 }
