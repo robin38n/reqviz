@@ -7,8 +7,7 @@ import (
 )
 
 // ParseResult holds the validated metadata and raw content extracted from an
-// OpenAPI specification. Both FromJSON and FromYAML return this same type to
-// ensure a consistent, type-safe response regardless of input format.
+// OpenAPI specification.
 type ParseResult struct {
 	Title         string
 	Version       string
