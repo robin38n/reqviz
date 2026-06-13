@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"syscall"
 	"time"
 )
 
@@ -72,16 +73,34 @@ func ResolveAndValidate(ctx context.Context, host string) ([]net.IP, error) {
 }
 
 func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(addr)
+	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid address %q: %w", addr, err)
 	}
-	ips, err := ResolveAndValidate(ctx, host)
-	if err != nil {
+	// Early, explicit rejection of localhost, numeric/encoded hosts, and literal
+	// private IPs (fail-closed if any resolved IP is private).
+	if _, err := ResolveAndValidate(ctx, host); err != nil {
 		return nil, err
 	}
-	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].String(), port))
+	// Dial the hostname so the stdlib runs Happy Eyeballs (RFC 6555/8305): it races
+	// IPv4/IPv6 and falls back within FallbackDelay (~300ms) if a family is unreachable.
+	// Control validates the actual IP the kernel is about to connect to — on every
+	// candidate — so a private/rebound address is never connected to.
+	dialer := &net.Dialer{
+		Timeout: 10 * time.Second,
+		Control: func(_, address string, _ syscall.RawConn) error {
+			h, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return err
+			}
+			ip := net.ParseIP(h)
+			if ip == nil || isPrivateIP(ip) {
+				return fmt.Errorf("connection to disallowed address blocked: %s", address)
+			}
+			return nil
+		},
+	}
+	return dialer.DialContext(ctx, network, addr)
 }
 
 func safeCheckRedirect(req *http.Request, via []*http.Request) error {
