@@ -2,8 +2,8 @@ import {
 	ChangeDetectionStrategy,
 	Component,
 	type ElementRef,
-	HostListener,
 	effect,
+	HostListener,
 	inject,
 	NgZone,
 	type OnDestroy,
@@ -220,4 +220,3 @@ export class ReactiveBackgroundComponent implements OnInit, OnDestroy {
 		this.animationFrameId = requestAnimationFrame(() => this.animate());
 	}
 }
-

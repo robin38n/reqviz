@@ -94,6 +94,12 @@ func (s *Server) ApproveSpec(w http.ResponseWriter, r *http.Request, id openapi_
 		var req ApproveSpecRequest
 		_ = json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&req)
 		if req.AllowedHosts != nil && len(*req.AllowedHosts) > 0 {
+			for _, h := range *req.AllowedHosts {
+				if !proxy.IsValidPublicHost(h) {
+					writeError(w, http.StatusBadRequest, "invalid host in allowedHosts")
+					return
+				}
+			}
 			hosts = *req.AllowedHosts
 		}
 	}
@@ -129,7 +135,8 @@ func (s *Server) proxyRequestCore(w http.ResponseWriter, r *http.Request) {
 
 	var req ProxyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		slog.Default().Error("proxy: decode request body", "error", err)
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -138,9 +145,17 @@ func (s *Server) proxyRequestCore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(req.Url) > 2048 {
+		writeError(w, http.StatusBadRequest, "invalid URL: too long")
+		return
+	}
 	parsed, err := url.Parse(req.Url)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		writeError(w, http.StatusBadRequest, "invalid URL: only http and https are allowed")
+		return
+	}
+	if parsed.User != nil {
+		writeError(w, http.StatusBadRequest, "invalid URL: embedded credentials are not allowed")
 		return
 	}
 
@@ -152,6 +167,13 @@ func (s *Server) proxyRequestCore(w http.ResponseWriter, r *http.Request) {
 	if !stored.Approved {
 		writeError(w, http.StatusForbidden, "spec not approved — please approve before sending requests")
 		return
+	}
+
+	for name, value := range derefHeaders(req.Headers) {
+		if !proxy.ValidHeaderName(name) || !proxy.ValidHeaderValue(value) {
+			writeError(w, http.StatusBadRequest, "invalid request header")
+			return
+		}
 	}
 
 	res, err := s.proxy.Execute(r.Context(), proxy.Input{
@@ -173,7 +195,8 @@ func (s *Server) proxyRequestCore(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, proxy.ErrSSRFBlocked):
 			writeError(w, http.StatusForbidden, err.Error())
 		default:
-			writeError(w, http.StatusInternalServerError, "Proxy internal error: "+err.Error())
+			slog.Default().Error("proxy: internal error", "error", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
 	}

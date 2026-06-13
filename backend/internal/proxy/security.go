@@ -25,7 +25,8 @@ func SanitizeHeaders(h http.Header) map[string]string {
 }
 
 var allowedRespContentTypePrefixes = []string{
-	"application/json", "application/xml", "application/x-www-form-urlencoded", "text/",
+	"application/json", "application/xml", "application/x-www-form-urlencoded",
+	"text/plain", "text/csv", "text/xml",
 }
 
 func ContentTypeAllowed(ct string) bool {

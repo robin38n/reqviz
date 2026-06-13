@@ -5,7 +5,12 @@ import { ReactiveBackgroundComponent } from "./shared/components/reactive-backgr
 
 @Component({
 	selector: "app-root",
-	imports: [RouterLink, RouterLinkActive, RouterOutlet, ReactiveBackgroundComponent],
+	imports: [
+		RouterLink,
+		RouterLinkActive,
+		RouterOutlet,
+		ReactiveBackgroundComponent,
+	],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	templateUrl: "./app.component.html",
 })

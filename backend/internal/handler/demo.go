@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/robin38n/reqviz/backend/internal/handler/demos"
@@ -72,7 +73,8 @@ func (s *Server) LoadDemo(w http.ResponseWriter, _ *http.Request, slug string) {
 
 	summary, err := s.parseAndStoreSpec(entry.Spec)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "demo spec failed validation: "+err.Error())
+		slog.Default().Error("demo spec failed validation", "slug", slug, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
