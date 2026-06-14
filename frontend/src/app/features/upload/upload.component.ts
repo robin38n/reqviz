@@ -43,8 +43,19 @@ export class UploadComponent {
 		});
 	}
 
+	/** Update the draft from manual input or a file, invalidating the last result. */
+	updateDraft(value: string): void {
+		this.draft.set(value);
+		this.selectedDemoSlug.set("");
+		this.summary.set(null);
+		this.error.set(null);
+	}
+
 	async loadDemo(slug: string) {
+		// Picking a different example resets the previous visualize result.
 		this.selectedDemoSlug.set(slug);
+		this.summary.set(null);
+		this.error.set(null);
 		try {
 			const { data } = await this.api.getDemoSpec(slug);
 			if (data) {
@@ -59,7 +70,7 @@ export class UploadComponent {
 		const input = event.target as HTMLInputElement;
 		const file = input.files?.[0];
 		if (!file) return;
-		this.draft.set(await file.text());
+		this.updateDraft(await file.text());
 	}
 
 	async visualize() {

@@ -3,9 +3,9 @@ import {
 	Component,
 	computed,
 	inject,
-	type OnInit,
 } from "@angular/core";
-import { ActivatedRoute, RouterLink } from "@angular/router";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
+import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import type {
 	EndpointNode,
 	GraphNode,
@@ -13,12 +13,12 @@ import type {
 } from "../../models/graph.model";
 import { ListToolbarComponent } from "../../shared/components/list-toolbar/list-toolbar.component";
 import { MethodBadgeComponent } from "../../shared/components/method-badge/method-badge.component";
-import { ButtonDirective } from "../../shared/directives/button.directive";
 import { GraphCanvasComponent } from "./graph/graph-canvas.component";
 import { GraphCanvasForceComponent } from "./graph/graph-canvas-force.component";
 import { GraphToolbarComponent } from "./graph/graph-toolbar.component";
 import { NodeDetailComponent } from "./node-detail/node-detail.component";
 import { SpecGraphService } from "./services/spec-graph.service";
+import { SpecTabsService } from "./services/spec-tabs.service";
 
 @Component({
 	selector: "app-spec-viewer",
@@ -30,14 +30,46 @@ import { SpecGraphService } from "./services/spec-graph.service";
 		MethodBadgeComponent,
 		NodeDetailComponent,
 		ListToolbarComponent,
-		ButtonDirective,
 	],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	templateUrl: "./spec-viewer.component.html",
 })
-export class SpecViewerComponent implements OnInit {
+export class SpecViewerComponent {
 	protected readonly svc = inject(SpecGraphService);
+	protected readonly tabs = inject(SpecTabsService);
 	private readonly route = inject(ActivatedRoute);
+	private readonly router = inject(Router);
+
+	constructor() {
+		// The component is reused across `/specs/:id` changes, so react to every
+		// param emission rather than reading the snapshot once.
+		this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
+			const id = params.get("id");
+			if (!id) return;
+			if (!this.tabs.open(id)) {
+				// Tab cap hit: revert the URL to the still-active tab.
+				const active = this.tabs.activeId();
+				if (active && active !== id) {
+					this.router.navigate(["/specs", active]);
+				}
+			}
+		});
+	}
+
+	switchTab(id: string): void {
+		if (id !== this.tabs.activeId()) {
+			this.router.navigate(["/specs", id]);
+		}
+	}
+
+	closeTab(id: string, event: Event): void {
+		event.stopPropagation();
+		const wasActive = id === this.tabs.activeId();
+		const nextActive = this.tabs.close(id);
+		if (wasActive) {
+			this.router.navigate(nextActive ? ["/specs", nextActive] : ["/"]);
+		}
+	}
 
 	protected readonly displayGraph = computed(
 		() => this.svc.filteredGraph() ?? this.svc.graph(),
@@ -93,13 +125,6 @@ export class SpecViewerComponent implements OnInit {
 			return 0;
 		});
 	});
-
-	ngOnInit() {
-		const id = this.route.snapshot.paramMap.get("id");
-		if (id) {
-			this.svc.loadSpec(id);
-		}
-	}
 
 	onNodeClick(node: GraphNode): void {
 		this.svc.selectNode(node);

@@ -1,9 +1,14 @@
+import { DOCUMENT } from "@angular/common";
 import {
 	ChangeDetectionStrategy,
 	Component,
+	type ElementRef,
+	effect,
+	inject,
 	input,
 	model,
 	output,
+	viewChild,
 } from "@angular/core";
 
 /**
@@ -11,13 +16,17 @@ import {
  * spec. Pure presentation: the parent supplies the host list and reacts to
  * `(confirm)` by calling the approval API. Shared by the Explorer's Try-It-Out
  * tab and the standalone API Client.
+ *
+ * The overlay is teleported to <body> while open so it always covers the full
+ * viewport, even when an ancestor establishes a containing block for fixed
+ * positioning (e.g. the spec-viewer's `backdrop-blur` panel).
  */
 @Component({
 	selector: "app-approval-dialog",
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	template: `
 		@if (open()) {
-			<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" (click)="cancel()">
+			<div #overlay class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" (click)="cancel()">
 				<div class="bg-app-bg border border-app-border rounded-lg shadow-xl max-w-md w-full p-5" (click)="$event.stopPropagation()">
 					<div class="flex items-start gap-3 mb-3">
 						<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"><title>Warning</title><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -61,6 +70,21 @@ export class ApprovalDialogComponent {
 	readonly open = model(false);
 	readonly hosts = input<string[]>([]);
 	readonly confirm = output<void>();
+
+	private readonly doc = inject(DOCUMENT);
+	private readonly overlay = viewChild<ElementRef<HTMLElement>>("overlay");
+
+	constructor() {
+		// Move the overlay to <body> once rendered so `fixed` resolves against the
+		// viewport rather than a blurred/clipped ancestor. Angular still owns the
+		// node, so bindings and teardown keep working from its new location.
+		effect(() => {
+			const el = this.overlay()?.nativeElement;
+			if (el && el.parentElement !== this.doc.body) {
+				this.doc.body.appendChild(el);
+			}
+		});
+	}
 
 	cancel(): void {
 		this.open.set(false);

@@ -15,4 +15,7 @@ export class ApiClientStateService {
 	readonly url = signal("");
 	readonly headers = signal<HeaderRow[]>([]);
 	readonly body = signal("");
+	// Id of the open spec the loaded endpoint came from, used to scope the proxy
+	// request (specId) and the approval gate. Null for manually-typed URLs.
+	readonly selectedSpecId = signal<string | null>(null);
 }

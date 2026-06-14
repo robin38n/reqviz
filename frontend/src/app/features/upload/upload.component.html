@@ -20,7 +20,7 @@
 
 			<!-- Editor Section -->
 			<div class="flex flex-col gap-4 h-full">
-				<textarea [value]="draft()" (input)="draft.set($any($event.target).value)"
+				<textarea [value]="draft()" (input)="updateDraft($any($event.target).value)"
 					class="flex-1 w-full min-h-[370px] p-5 font-mono text-sm leading-relaxed border border-app-border rounded-lg shadow-inner focus:outline-none focus:border-app-text-muted resize-none bg-app-bg text-app-text transition-colors placeholder:text-app-text-muted/60"
 					placeholder="Paste a JSON or YAML OpenAPI spec, e.g.:
 

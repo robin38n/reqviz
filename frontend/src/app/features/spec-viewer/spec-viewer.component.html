@@ -1,4 +1,48 @@
 <div class="max-w-[1200px] mx-auto mt-8 px-4 pb-16">
+	@if (tabs.tabs().length > 0) {
+		<div class="flex items-center gap-1 pt-1 border-b border-app-border mb-4 overflow-x-auto">
+			@for (tab of tabs.tabs(); track tab.id) {
+				<div
+					role="tab"
+					[attr.aria-selected]="tab.id === tabs.activeId()"
+					class="group flex items-center gap-2 py-2.5 pl-3 pr-2 border border-b-0 rounded-t-lg text-sm whitespace-nowrap cursor-pointer transition-colors max-w-[220px] shrink-0"
+					[class]="tab.id === tabs.activeId()
+						? 'bg-app-surface/80 backdrop-blur-md border-app-border text-app-text font-medium shadow-sm'
+						: 'bg-transparent border-transparent text-app-text-muted hover:bg-app-surface-hover hover:text-app-text'"
+					(click)="switchTab(tab.id)"
+				>
+					<span class="size-1.5 rounded-full shrink-0 transition-colors" [class]="tab.id === tabs.activeId() ? 'bg-blue-500' : 'bg-app-text-muted/40'"></span>
+					<span class="overflow-hidden text-ellipsis min-w-0">
+						@if (tab.loading() && !tab.summary()) { Loading… } @else { {{ tab.summary()?.title || 'Untitled spec' }} }
+					</span>
+					<button
+						type="button"
+						class="shrink-0 flex items-center justify-center size-5 rounded text-app-text-muted/60 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+						(click)="closeTab(tab.id, $event)"
+						title="Close tab"
+					>
+						<svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><title>Close</title><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+					</button>
+				</div>
+			}
+			<a
+				routerLink="/"
+				title="Open another spec"
+				[class.opacity-40]="tabs.atMax()"
+				class="flex items-center justify-center size-8 my-1 ml-1 rounded-lg text-app-text-muted hover:text-app-text hover:bg-app-surface-hover transition-colors shrink-0"
+			>
+				<svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><title>New tab</title><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+			</a>
+		</div>
+
+		@if (tabs.openError(); as oerr) {
+			<div class="flex items-center gap-2 mb-4 py-2 px-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-sm text-amber-700 dark:text-amber-400 animate-in fade-in slide-in-from-top-1 duration-200">
+				<svg class="size-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><title>Notice</title><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86a2 2 0 001.74-3l-6.93-12a2 2 0 00-3.48 0l-6.93 12a2 2 0 001.74 3z" /></svg>
+				<span>{{ oerr }}</span>
+			</div>
+		}
+	}
+
 	@if (svc.loading()) {
 		<p class="text-app-text-muted">Loading spec...</p>
 	}
@@ -20,14 +64,6 @@
 		<header>
 			<div class="flex items-center gap-3 flex-wrap mt-2">
 				<h1 class="mb-0 text-2xl font-bold"><span class="bg-clip-text text-transparent bg-gradient-to-r from-app-text to-app-text-muted">{{ s.title }}</span> <span class="text-app-text-muted text-sm font-normal">v{{ s.version }}</span></h1>
-				<a routerLink="/" title="Load a new spec" appButton
-					class="ml-auto py-1.5 px-3 text-[0.8rem]">
-					<svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<title>New spec</title>
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-					</svg>
-					New spec
-				</a>
 			</div>
 			<div class="flex gap-4 mt-2 mb-4">
 				<span class="py-1 px-2 bg-app-surface/80 backdrop-blur-md border border-app-border rounded text-sm text-app-text-muted shadow-sm">{{ svc.endpointNodes().length }} endpoints</span>

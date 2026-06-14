@@ -2,27 +2,35 @@
 	<h1 class="text-2xl font-bold mb-1"><span class="bg-clip-text text-transparent bg-gradient-to-r from-app-text to-app-text-muted">API Client</span></h1>
 	<p class="text-app-text-muted text-sm mb-6">Send HTTP requests to any API endpoint.</p>
 
-	<!-- Endpoints from the spec loaded in the Explorer (cached for this session) -->
-	@if (specGraph.endpointNodes().length > 0) {
-		<details class="mb-6 bg-app-surface/80 backdrop-blur-md border border-app-border rounded-xl shadow-sm group" open>
-			<summary class="flex items-center gap-2 px-4 py-3 cursor-pointer list-none">
-				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-open:rotate-90 text-app-text-muted shrink-0"><title>Toggle</title><polyline points="9 18 15 12 9 6"/></svg>
-				<span class="text-sm font-semibold text-app-text">{{ specGraph.summary()?.title }}</span>
-				<span class="text-xs text-app-text-muted">— Endpoints ({{ specGraph.endpointNodes().length }})</span>
-			</summary>
-			<div class="px-3 pb-3 max-h-[260px] overflow-y-auto">
-				@for (ep of specGraph.endpointNodes(); track ep.id) {
-					<button
-						type="button"
-						class="w-full flex items-center gap-2 py-1.5 px-2 rounded text-left cursor-pointer mb-0.5 hover:bg-app-surface-hover transition-colors"
-						(click)="loadEndpoint(ep)"
-					>
-						<app-method-badge [method]="ep.method" size="xs" />
-						<span class="font-mono text-[0.8rem] text-app-text overflow-hidden text-ellipsis whitespace-nowrap min-w-0">{{ ep.path }}</span>
-					</button>
+	<!-- Endpoints aggregated from every open spec tab (cached for this session) -->
+	@if (tabs.tabs().length > 0) {
+		<div class="mb-6 flex flex-col gap-2">
+			<div class="text-xs font-semibold text-app-text-muted uppercase tracking-wide">Open specs</div>
+			@for (tab of tabs.tabs(); track tab.id) {
+				@if (tab.endpointNodes().length > 0) {
+					<details class="bg-app-surface/80 backdrop-blur-md border border-app-border rounded-xl shadow-sm group" [open]="tabs.tabs().length === 1">
+						<summary class="flex items-center gap-2 px-4 py-3 cursor-pointer list-none">
+							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="transition-transform group-open:rotate-90 text-app-text-muted shrink-0"><title>Toggle</title><polyline points="9 18 15 12 9 6"/></svg>
+							<span class="text-sm font-semibold text-app-text overflow-hidden text-ellipsis whitespace-nowrap min-w-0">{{ tab.summary()?.title }}</span>
+							<span class="text-xs text-app-text-muted shrink-0">— Endpoints ({{ tab.endpointNodes().length }})</span>
+						</summary>
+						<div class="px-3 pb-3 max-h-[260px] overflow-y-auto">
+							@for (ep of tab.endpointNodes(); track ep.id) {
+								<button
+									type="button"
+									class="w-full flex items-center gap-2 py-1.5 px-2 rounded text-left cursor-pointer mb-0.5 hover:bg-app-surface-hover transition-colors"
+									[class]="state.selectedSpecId() === tab.id && url() === tab.serverBaseUrl() + ep.path ? 'bg-blue-500/10' : ''"
+									(click)="loadEndpoint(ep, tab)"
+								>
+									<app-method-badge [method]="ep.method" size="xs" />
+									<span class="font-mono text-[0.8rem] text-app-text overflow-hidden text-ellipsis whitespace-nowrap min-w-0">{{ ep.path }}</span>
+								</button>
+							}
+						</div>
+					</details>
 				}
-			</div>
-		</details>
+			}
+		</div>
 	}
 
 	<div class="w-full bg-app-surface/80 backdrop-blur-md border border-app-border rounded-xl shadow-2xl p-6 relative z-10 transition-all mb-8">
@@ -117,4 +125,4 @@
 	<app-request-history (replayRequest)="onReplayRequest($event)" />
 </div>
 
-<app-approval-dialog [(open)]="showApprovalDialog" [hosts]="specGraph.allowedHosts()" (confirm)="onApprovalConfirmed()" />
+<app-approval-dialog [(open)]="showApprovalDialog" [hosts]="selectedTab()?.allowedHosts() ?? []" (confirm)="onApprovalConfirmed()" />

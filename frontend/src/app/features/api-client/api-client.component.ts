@@ -13,7 +13,8 @@ import { MethodBadgeComponent } from "../../shared/components/method-badge/metho
 import { RequestHistoryComponent } from "../../shared/components/request-history/request-history.component";
 import { ResponseViewerComponent } from "../../shared/components/response-viewer/response-viewer.component";
 import { ButtonDirective } from "../../shared/directives/button.directive";
-import { SpecGraphService } from "../spec-viewer/services/spec-graph.service";
+import type { SpecTab } from "../spec-viewer/services/spec-tab";
+import { SpecTabsService } from "../spec-viewer/services/spec-tabs.service";
 import {
 	type HistoryEntry,
 	type ProxyRequest,
@@ -39,7 +40,7 @@ const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 export class ApiClientComponent {
 	private readonly router = inject(Router);
 	protected readonly tryItOut = inject(TryItOutService);
-	protected readonly specGraph = inject(SpecGraphService);
+	protected readonly tabs = inject(SpecTabsService);
 	protected readonly state = inject(ApiClientStateService);
 
 	readonly methods = METHODS;
@@ -56,10 +57,18 @@ export class ApiClientComponent {
 		return m === "POST" || m === "PUT" || m === "PATCH";
 	});
 
-	/** Fill the request form from a spec endpoint (method + full URL). */
-	loadEndpoint(ep: EndpointNode): void {
+	/** The open spec tab a loaded endpoint came from (null for manual URLs). */
+	readonly selectedTab = computed(
+		() =>
+			this.tabs.tabs().find((t) => t.id === this.state.selectedSpecId()) ??
+			null,
+	);
+
+	/** Fill the request form from a spec endpoint, remembering its source spec. */
+	loadEndpoint(ep: EndpointNode, tab: SpecTab): void {
 		this.method.set(ep.method);
-		this.url.set(`${this.specGraph.serverBaseUrl()}${ep.path}`);
+		this.url.set(`${tab.serverBaseUrl()}${ep.path}`);
+		this.state.selectedSpecId.set(tab.id);
 		this.urlError.set("");
 	}
 
@@ -116,7 +125,8 @@ export class ApiClientComponent {
 
 		// A loaded spec must be approved before the proxy will forward requests.
 		// Prompt for approval instead of letting the backend reject it.
-		if (this.specGraph.specId() && !this.specGraph.approved()) {
+		const tab = this.selectedTab();
+		if (tab && !tab.approved()) {
 			this.showApprovalDialog.set(true);
 			return;
 		}
@@ -149,14 +159,16 @@ export class ApiClientComponent {
 			url: reqUrl,
 			headers: Object.keys(headers).length > 0 ? headers : undefined,
 			body: hasBody && bodyPayload != null ? bodyPayload : undefined,
-			specId: this.specGraph.specId() ?? undefined,
+			specId: this.selectedTab()?.id,
 		});
 	}
 
-	/** Approve the loaded spec, then retry the send the user originally clicked. */
+	/** Approve the source spec, then retry the send the user originally clicked. */
 	async onApprovalConfirmed(): Promise<void> {
-		await this.specGraph.approve();
-		if (this.specGraph.approved()) {
+		const tab = this.selectedTab();
+		if (!tab) return;
+		await tab.approve();
+		if (tab.approved()) {
 			await this.sendRequest();
 		}
 	}

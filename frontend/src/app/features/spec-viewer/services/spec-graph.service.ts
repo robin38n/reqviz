@@ -1,220 +1,117 @@
-import { computed, Injectable, inject, signal } from "@angular/core";
+import { computed, Injectable, inject } from "@angular/core";
 import { ApiService } from "../../../core/api.service";
-import type { components } from "../../../core/schema";
-import type {
-	EndpointNode,
-	GraphNode,
-	SchemaNode,
-	SpecGraph,
-} from "../../../models/graph.model";
-import { buildSpecGraph } from "../../../models/spec-to-graph";
+import type { GraphNode } from "../../../models/graph.model";
+import { SpecTab } from "./spec-tab";
+import { SpecTabsService } from "./spec-tabs.service";
 
-type SpecSummary = components["schemas"]["SpecSummary"];
-
+/**
+ * Thin facade over the currently active {@link SpecTab}. The spec-viewer renders
+ * only one tab at a time, so its child components (graph toolbar, node/endpoint/
+ * schema detail, try-it-out) keep injecting this service and transparently read
+ * and write the active tab's state. Reading `active()` inside each getter makes
+ * every binding reactive to tab switches.
+ *
+ * Components that need *all* open specs (e.g. the api-client) use
+ * {@link SpecTabsService} directly instead.
+ */
 @Injectable({ providedIn: "root" })
 export class SpecGraphService {
+	private readonly tabs = inject(SpecTabsService);
 	private readonly api = inject(ApiService);
 
-	readonly loading = signal(false);
-	readonly error = signal<string | null>(null);
-	readonly specId = signal<string | null>(null);
-	readonly summary = signal<SpecSummary | null>(null);
-	readonly graph = signal<SpecGraph | null>(null);
-	readonly rawSpec = signal<Record<string, unknown> | null>(null);
-	readonly selectedNodeId = signal<string | null>(null);
+	// Fallback so getters stay null-safe when no tab is active.
+	private readonly empty = new SpecTab(this.api, "");
 
-	// Filter state
-	readonly searchQuery = signal("");
-	readonly selectedTags = signal<Set<string>>(new Set());
-	readonly selectedMethods = signal<Set<string>>(new Set());
+	private get t(): SpecTab {
+		return this.tabs.active() ?? this.empty;
+	}
 
-	// Spec-viewer view preferences (persist across navigation within a session)
-	readonly layout = signal<"structured" | "interactive">("interactive");
-	readonly listSearch = signal("");
-	readonly listSort = signal("az");
+	readonly specId = computed(() => this.tabs.active()?.id ?? null);
 
-	// Base URL from the spec's first server entry, used to build full request URLs.
-	readonly serverBaseUrl = computed(() => {
-		const servers = this.rawSpec()?.servers;
-		if (!Array.isArray(servers) || servers.length === 0) return "";
-		const first = servers[0] as Record<string, unknown>;
-		return typeof first?.url === "string" ? first.url : "";
-	});
+	get loading() {
+		return this.t.loading;
+	}
+	get error() {
+		return this.t.error;
+	}
+	get summary() {
+		return this.t.summary;
+	}
+	get graph() {
+		return this.t.graph;
+	}
+	get rawSpec() {
+		return this.t.rawSpec;
+	}
+	get selectedNodeId() {
+		return this.t.selectedNodeId;
+	}
+	get searchQuery() {
+		return this.t.searchQuery;
+	}
+	get selectedTags() {
+		return this.t.selectedTags;
+	}
+	get selectedMethods() {
+		return this.t.selectedMethods;
+	}
+	get layout() {
+		return this.t.layout;
+	}
+	get listSearch() {
+		return this.t.listSearch;
+	}
+	get listSort() {
+		return this.t.listSort;
+	}
 
-	readonly approved = computed(() => this.summary()?.approved ?? false);
-	readonly allowedHosts = computed(() => this.summary()?.allowedHosts ?? []);
-
-	readonly endpointNodes = computed(
-		() =>
-			this.graph()?.nodes.filter(
-				(n): n is EndpointNode => n.type === "endpoint",
-			) ?? [],
-	);
-
-	readonly schemaNodes = computed(
-		() =>
-			this.graph()?.nodes.filter((n): n is SchemaNode => n.type === "schema") ??
-			[],
-	);
-
-	readonly edgeCount = computed(() => this.graph()?.edges.length ?? 0);
-
-	readonly allTags = computed(() => {
-		const tags = new Set<string>();
-		for (const ep of this.endpointNodes()) {
-			for (const tag of ep.tags) tags.add(tag);
-		}
-		return [...tags].sort();
-	});
-
-	readonly filteredGraph = computed((): SpecGraph | null => {
-		const g = this.graph();
-		if (!g) return null;
-
-		const query = this.searchQuery().toLowerCase().trim();
-		const tags = this.selectedTags();
-		const methods = this.selectedMethods();
-		const hasFilters = query.length > 0 || tags.size > 0 || methods.size > 0;
-		if (!hasFilters) return g;
-
-		// Filter endpoint nodes
-		const filteredEndpoints = g.nodes.filter((n): n is EndpointNode => {
-			if (n.type !== "endpoint") return false;
-			const ep = n as EndpointNode;
-			if (methods.size > 0 && !methods.has(ep.method)) return false;
-			if (tags.size > 0 && !ep.tags.some((t) => tags.has(t))) return false;
-			if (query) {
-				const haystack =
-					`${ep.method} ${ep.path} ${ep.summary} ${ep.operationId ?? ""}`.toLowerCase();
-				if (!haystack.includes(query)) return false;
-			}
-			return true;
-		});
-
-		const endpointIds = new Set(filteredEndpoints.map((n) => n.id));
-
-		// Keep schema nodes connected to surviving endpoints
-		const connectedSchemaIds = new Set<string>();
-		for (const edge of g.edges) {
-			if (endpointIds.has(edge.source)) connectedSchemaIds.add(edge.target);
-			if (endpointIds.has(edge.target)) connectedSchemaIds.add(edge.source);
-		}
-
-		// Also include schemas matching the search query directly
-		const filteredSchemas = g.nodes.filter((n): n is SchemaNode => {
-			if (n.type !== "schema") return false;
-			const sc = n as SchemaNode;
-			if (connectedSchemaIds.has(sc.id)) return true;
-			if (query) {
-				const haystack = `${sc.name} ${sc.properties.join(" ")}`.toLowerCase();
-				return haystack.includes(query);
-			}
-			return false;
-		});
-
-		const allNodeIds = new Set([
-			...endpointIds,
-			...filteredSchemas.map((n) => n.id),
-		]);
-
-		// Also add schema→schema edges for connected schemas
-		const edges = g.edges.filter(
-			(e) => allNodeIds.has(e.source) && allNodeIds.has(e.target),
-		);
-
-		return {
-			nodes: [...filteredEndpoints, ...filteredSchemas],
-			edges,
-		};
-	});
-
-	readonly selectedNode = computed(() => {
-		const id = this.selectedNodeId();
-		if (!id) return null;
-		return this.graph()?.nodes.find((n) => n.id === id) ?? null;
-	});
-
-	readonly selectedNodeEdges = computed(() => {
-		const id = this.selectedNodeId();
-		const g = this.graph();
-		if (!id || !g) return [];
-		return g.edges.filter((e) => e.source === id || e.target === id);
-	});
+	get serverBaseUrl() {
+		return this.t.serverBaseUrl;
+	}
+	get approved() {
+		return this.t.approved;
+	}
+	get allowedHosts() {
+		return this.t.allowedHosts;
+	}
+	get endpointNodes() {
+		return this.t.endpointNodes;
+	}
+	get schemaNodes() {
+		return this.t.schemaNodes;
+	}
+	get edgeCount() {
+		return this.t.edgeCount;
+	}
+	get allTags() {
+		return this.t.allTags;
+	}
+	get filteredGraph() {
+		return this.t.filteredGraph;
+	}
+	get selectedNode() {
+		return this.t.selectedNode;
+	}
+	get selectedNodeEdges() {
+		return this.t.selectedNodeEdges;
+	}
 
 	selectNode(node: GraphNode): void {
-		this.selectedNodeId.set(this.selectedNodeId() === node.id ? null : node.id);
+		this.t.selectNode(node);
 	}
-
 	clearSelection(): void {
-		this.selectedNodeId.set(null);
+		this.t.clearSelection();
 	}
-
 	toggleTag(tag: string): void {
-		const current = this.selectedTags();
-		const next = new Set(current);
-		if (next.has(tag)) next.delete(tag);
-		else next.add(tag);
-		this.selectedTags.set(next);
+		this.t.toggleTag(tag);
 	}
-
 	toggleMethod(method: string): void {
-		const current = this.selectedMethods();
-		const next = new Set(current);
-		if (next.has(method)) next.delete(method);
-		else next.add(method);
-		this.selectedMethods.set(next);
+		this.t.toggleMethod(method);
 	}
-
 	clearFilters(): void {
-		this.searchQuery.set("");
-		this.selectedTags.set(new Set());
-		this.selectedMethods.set(new Set());
+		this.t.clearFilters();
 	}
-
-	async approve(hosts?: string[]): Promise<void> {
-		const id = this.specId();
-		if (!id) return;
-		try {
-			const { data, error } = await this.api.approveSpec(id, hosts);
-			if (error || !data) {
-				this.error.set("Could not approve this spec. Please try again.");
-				return;
-			}
-			this.summary.set(data);
-		} catch {
-			this.error.set(
-				"Couldn't reach the server while approving. Please try again.",
-			);
-		}
-	}
-
-	async loadSpec(id: string): Promise<void> {
-		this.loading.set(true);
-		this.error.set(null);
-		this.specId.set(id);
-		this.selectedNodeId.set(null);
-
-		try {
-			const { data, error } = await this.api.getSpec(id);
-			if (error) {
-				this.error.set("Could not load this spec.");
-				return;
-			}
-			if (data) {
-				this.summary.set(data.summary);
-				this.rawSpec.set(data.raw as Record<string, unknown>);
-				const graph = buildSpecGraph(data.raw);
-				this.graph.set(graph);
-
-				// Preselect first node
-				if (graph.nodes.length > 0) {
-					this.selectedNodeId.set(graph.nodes[0].id);
-				}
-			}
-		} catch {
-			this.error.set("Couldn't reach the server — is the backend running?");
-		} finally {
-			this.loading.set(false);
-		}
+	approve(hosts?: string[]): Promise<void> {
+		return this.t.approve(hosts);
 	}
 }
