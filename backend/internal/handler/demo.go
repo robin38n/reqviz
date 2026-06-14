@@ -44,7 +44,6 @@ func demoBySlug(slug string) *demoEntry {
 	return nil
 }
 
-// ListDemos returns metadata for all available demo specs.
 func (s *Server) ListDemos(w http.ResponseWriter, _ *http.Request) {
 	list := make([]DemoInfo, len(demoSpecs))
 	for i, d := range demoSpecs {
@@ -53,11 +52,10 @@ func (s *Server) ListDemos(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, list)
 }
 
-// GetDemoSpec returns the raw OpenAPI spec JSON for a demo by slug.
 func (s *Server) GetDemoSpec(w http.ResponseWriter, _ *http.Request, slug string) {
 	entry := demoBySlug(slug)
 	if entry == nil {
-		writeJSON(w, http.StatusNotFound, NotFound{strPtr("unknown demo: " + slug)})
+		writeJSON(w, http.StatusNotFound, NotFound{new("unknown demo: " + slug)})
 		return
 	}
 	writeJSON(w, http.StatusOK, entry.Spec)
@@ -67,7 +65,7 @@ func (s *Server) GetDemoSpec(w http.ResponseWriter, _ *http.Request, slug string
 func (s *Server) LoadDemo(w http.ResponseWriter, _ *http.Request, slug string) {
 	entry := demoBySlug(slug)
 	if entry == nil {
-		writeJSON(w, http.StatusNotFound, NotFound{strPtr("unknown demo: " + slug)})
+		writeJSON(w, http.StatusNotFound, NotFound{new("unknown demo: " + slug)})
 		return
 	}
 

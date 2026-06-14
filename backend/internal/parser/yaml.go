@@ -6,7 +6,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// FromYAML parses a YAML byte slice into a validated ParseResult.
 func FromYAML(data []byte) (*ParseResult, error) {
 	var raw map[string]any
 	if err := yaml.Unmarshal(data, &raw); err != nil {
@@ -20,7 +19,7 @@ func FromYAML(data []byte) (*ParseResult, error) {
 // gopkg.in/yaml.v3 into map[string]any to ensure the map is JSON-compatible.
 func sanitizeMap(v any) any {
 	switch x := v.(type) {
-	case map[interface{}]interface{}:
+	case map[any]any:
 		m := make(map[string]any)
 		for k, val := range x {
 			m[fmt.Sprintf("%v", k)] = sanitizeMap(val)

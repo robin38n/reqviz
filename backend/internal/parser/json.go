@@ -5,7 +5,6 @@ import (
 	"fmt"
 )
 
-// FromJSON parses a JSON byte slice into a validated ParseResult.
 func FromJSON(data []byte) (*ParseResult, error) {
 	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {

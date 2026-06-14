@@ -2,13 +2,11 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
-	"time"
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
@@ -60,24 +58,14 @@ func (s *Server) UploadSpec(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetSpec(w http.ResponseWriter, _ *http.Request, id openapi_types.UUID) {
 	stored, err := s.store.Get(id)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, NotFound{strPtr("Spec not found. It may have expired, or the server was restarted.")})
+		writeJSON(w, http.StatusNotFound, NotFound{new("Spec not found. It may have expired, or the server was restarted.")})
 		return
 	}
 
 	writeJSON(w, http.StatusOK, ParsedSpec{
-		Id:  openapi_types.UUID(stored.ID),
-		Raw: stored.Raw,
-		Summary: SpecSummary{
-			Id:            openapi_types.UUID(stored.ID),
-			Title:         stored.Title,
-			Version:       stored.Version,
-			EndpointCount: stored.EndpointCount,
-			SchemaCount:   stored.SchemaCount,
-			Tags:          &stored.Tags,
-			CreatedAt:     &stored.CreatedAt,
-			Approved:      stored.Approved,
-			AllowedHosts:  stored.AllowedHosts,
-		},
+		Id:      openapi_types.UUID(stored.ID),
+		Raw:     stored.Raw,
+		Summary: toSummary(stored),
 	})
 }
 
@@ -85,7 +73,7 @@ func (s *Server) GetSpec(w http.ResponseWriter, _ *http.Request, id openapi_type
 func (s *Server) ApproveSpec(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	stored, err := s.store.Get(id)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, NotFound{strPtr("Spec not found. It may have expired, or the server was restarted.")})
+		writeJSON(w, http.StatusNotFound, NotFound{new("Spec not found. It may have expired, or the server was restarted.")})
 		return
 	}
 
@@ -106,21 +94,11 @@ func (s *Server) ApproveSpec(w http.ResponseWriter, r *http.Request, id openapi_
 
 	updated, err := s.store.Approve(id, hosts)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, NotFound{strPtr("Spec not found. It may have expired, or the server was restarted.")})
+		writeJSON(w, http.StatusNotFound, NotFound{new("Spec not found. It may have expired, or the server was restarted.")})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, SpecSummary{
-		Id:            openapi_types.UUID(updated.ID),
-		Title:         updated.Title,
-		Version:       updated.Version,
-		EndpointCount: updated.EndpointCount,
-		SchemaCount:   updated.SchemaCount,
-		Tags:          &updated.Tags,
-		CreatedAt:     &updated.CreatedAt,
-		Approved:      updated.Approved,
-		AllowedHosts:  updated.AllowedHosts,
-	})
+	writeJSON(w, http.StatusOK, toSummary(updated))
 }
 
 var proxyMiddleware = Chain(OriginAllowed)
@@ -187,22 +165,7 @@ func (s *Server) proxyRequestCore(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		switch {
-		case errors.Is(err, proxy.ErrHostNotAllowed):
-			writeError(w, http.StatusForbidden, "This host isn't in the spec's approved list. You can only call the hosts you approved for this spec.")
-		case errors.Is(err, proxy.ErrRateLimited):
-			writeError(w, http.StatusTooManyRequests, "Too many requests to this host. Wait a few seconds and try again.")
-		case errors.Is(err, proxy.ErrSSRFBlocked):
-			// Log the real reason; never reveal the SSRF check internals to the client.
-			slog.Default().Warn("proxy: request blocked", "error", err)
-			writeError(w, http.StatusForbidden, "That address can't be reached. ReqViz only allows requests to public internet hosts, not local or private networks.")
-		case errors.Is(err, proxy.ErrBadRequest):
-			slog.Default().Warn("proxy: bad request", "error", err)
-			writeError(w, http.StatusBadRequest, "The request couldn't be built. Check the URL, method, and body.")
-		default:
-			slog.Default().Error("proxy: internal error", "error", err)
-			writeError(w, http.StatusInternalServerError, "Something went wrong while sending the request.")
-		}
+		writeProxyError(w, err)
 		return
 	}
 
@@ -238,19 +201,23 @@ func (s *Server) storeResult(r *parser.ParseResult) *SpecSummary {
 		Raw:           r.Raw,
 		AllowedHosts:  proxy.ExtractServerHosts(r.Raw),
 	}
-	id := s.store.Save(stored)
+	s.store.Save(stored)
+	summary := toSummary(stored)
+	return &summary
+}
 
-	now := time.Now()
-	return &SpecSummary{
-		Id:            openapi_types.UUID(id),
-		Title:         r.Title,
-		Version:       r.Version,
-		EndpointCount: r.EndpointCount,
-		SchemaCount:   r.SchemaCount,
-		Tags:          &r.Tags,
-		CreatedAt:     &now,
-		Approved:      stored.Approved,
-		AllowedHosts:  stored.AllowedHosts,
+// toSummary projects a stored spec into the API SpecSummary shape.
+func toSummary(s *store.StoredSpec) SpecSummary {
+	return SpecSummary{
+		Id:            openapi_types.UUID(s.ID),
+		Title:         s.Title,
+		Version:       s.Version,
+		EndpointCount: s.EndpointCount,
+		SchemaCount:   s.SchemaCount,
+		Tags:          &s.Tags,
+		CreatedAt:     &s.CreatedAt,
+		Approved:      s.Approved,
+		AllowedHosts:  s.AllowedHosts,
 	}
 }
 
@@ -280,12 +247,4 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, ValidationError{Error: &msg})
-}
-
-func strPtr(s string) *string {
-	return &s
 }

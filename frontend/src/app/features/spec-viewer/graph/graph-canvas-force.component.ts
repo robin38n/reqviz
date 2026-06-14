@@ -1,61 +1,28 @@
-import {
-	afterNextRender,
-	ChangeDetectionStrategy,
-	Component,
-	type ElementRef,
-	effect,
-	input,
-	output,
-	viewChild,
-} from "@angular/core";
+import { ChangeDetectionStrategy, Component } from "@angular/core";
 import * as d3 from "d3";
-import type {
-	EdgeKind,
-	EndpointNode,
-	GraphNode,
-	SchemaNode,
-	SpecGraph,
-} from "../../../models/graph.model";
+import type { EdgeKind } from "../../../models/graph.model";
 import {
 	EDGE_COLORS,
 	EDGE_DASH,
 	SCHEMA_FILL,
 	SCHEMA_STROKE,
 } from "../../../shared/constants/edge-styles";
-import { METHOD_COLORS } from "../../../shared/constants/method-colors";
-import { truncateLabel } from "../../../shared/utils/truncate-label";
+import { GraphCanvasBase } from "./graph-canvas-base";
 import { GraphControlsComponent } from "./graph-controls.component";
 import { GraphLegendComponent } from "./graph-legend.component";
+import {
+	appendArrowMarker,
+	appendEndpointShapes,
+	buildSimNodes,
+	type SimNode,
+} from "./graph-render";
 
-const MAX_ENDPOINT_W = 280;
-const MAX_SCHEMA_W = 200;
+type ForceNode = SimNode & d3.SimulationNodeDatum;
 
-/** Mutable copy of GraphNode for D3 force simulation (adds x, y, vx, vy). */
-interface SimNode extends d3.SimulationNodeDatum {
-	id: string;
-	type: "endpoint" | "schema";
-	label: string;
-	fullLabel: string;
-	sublabel: string;
-	method?: string;
-	width: number;
-	height: number;
-	original: GraphNode;
-}
-
-/** Mutable copy of GraphEdge for D3 force simulation (source/target become object refs). */
-interface SimLink extends d3.SimulationLinkDatum<SimNode> {
+interface SimLink extends d3.SimulationLinkDatum<ForceNode> {
 	kind: EdgeKind;
 	label?: string;
 	curveOffset: number;
-}
-
-function nodeWidth(node: SimNode): number {
-	return node.width;
-}
-
-function nodeHeight(node: SimNode): number {
-	return node.height;
 }
 
 @Component({
@@ -65,45 +32,13 @@ function nodeHeight(node: SimNode): number {
 	templateUrl: "./graph-canvas-force.component.html",
 	styleUrl: "./graph-canvas-force.component.css",
 })
-export class GraphCanvasForceComponent {
-	readonly graph = input.required<SpecGraph>();
-	readonly nodeClick = output<GraphNode>();
+export class GraphCanvasForceComponent extends GraphCanvasBase {
+	private simulation: d3.Simulation<ForceNode, SimLink> | null = null;
 
-	private readonly svgRef =
-		viewChild.required<ElementRef<SVGSVGElement>>("svg");
-	private readonly containerRef =
-		viewChild.required<ElementRef<HTMLDivElement>>("container");
-
-	private simulation: d3.Simulation<SimNode, SimLink> | null = null;
-	private zoom: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
-	private svgSelection: d3.Selection<
-		SVGSVGElement,
-		unknown,
-		null,
-		undefined
-	> | null = null;
-	private initialized = false;
-
-	constructor() {
-		afterNextRender(() => {
-			this.initialized = true;
-			this.initGraph();
-		});
-
-		// Re-render when graph input changes after initial render
-		effect(() => {
-			const g = this.graph();
-			if (this.initialized && g) {
-				this.initGraph();
-			}
-		});
-	}
-
-	private initGraph(): void {
+	protected initGraph(): void {
 		const graph = this.graph();
 		const svgEl = this.svgRef().nativeElement;
 
-		// Clear previous simulation and SVG content
 		if (this.simulation) {
 			this.simulation.stop();
 			this.simulation = null;
@@ -116,38 +51,7 @@ export class GraphCanvasForceComponent {
 		const width = container.clientWidth || 800;
 		const height = container.clientHeight || 500;
 
-		// Build mutable copies for D3
-		const nodes: SimNode[] = graph.nodes.map((n) => {
-			if (n.type === "endpoint") {
-				const ep = n as EndpointNode;
-				const fullLabel = `${ep.method} ${ep.path}`;
-				return {
-					id: n.id,
-					type: "endpoint" as const,
-					label: truncateLabel(fullLabel, MAX_ENDPOINT_W, 7.5),
-					fullLabel,
-					sublabel: ep.summary || "",
-					method: ep.method,
-					width: Math.min(
-						MAX_ENDPOINT_W,
-						Math.max(140, fullLabel.length * 7.5 + 24),
-					),
-					height: 40,
-					original: n,
-				};
-			}
-			const sc = n as SchemaNode;
-			return {
-				id: n.id,
-				type: "schema" as const,
-				label: truncateLabel(sc.name, MAX_SCHEMA_W, 8),
-				fullLabel: sc.name,
-				sublabel: "",
-				width: Math.min(MAX_SCHEMA_W, Math.max(120, sc.name.length * 8 + 24)),
-				height: 30,
-				original: n,
-			};
-		});
+		const nodes: ForceNode[] = buildSimNodes(graph, 30, () => "");
 
 		const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
@@ -161,8 +65,8 @@ export class GraphCanvasForceComponent {
 				curveOffset: 0,
 			}));
 
-		// Assign curve offsets to parallel edges (same source+target pair).
-		// Each parallel edge gets a different offset so they fan out instead of overlapping.
+		// Spread parallel edges (same source+target pair) symmetrically so they
+		// fan out instead of overlapping: -25,+25 for two; -25,0,+25 for three.
 		const pairCount = new Map<string, number>();
 		const pairIndex = new Map<string, number>();
 		for (const l of links) {
@@ -175,48 +79,23 @@ export class GraphCanvasForceComponent {
 			if (total > 1) {
 				const idx = pairIndex.get(key) ?? 0;
 				pairIndex.set(key, idx + 1);
-				// Spread symmetrically: -20, +20 for 2 edges; -20, 0, +20 for 3, etc.
 				l.curveOffset = (idx - (total - 1) / 2) * 25;
 			}
 		}
 
-		// SVG setup
 		const svg = d3
 			.select(svgEl)
 			.attr("viewBox", `0 0 ${width} ${height}`)
 			.attr("preserveAspectRatio", "xMidYMid meet");
 
-		// Arrow markers for each edge kind
 		const defs = svg.append("defs");
 		for (const [kind, color] of Object.entries(EDGE_COLORS)) {
-			defs
-				.append("marker")
-				.attr("id", `arrow-force-${kind}`)
-				.attr("viewBox", "0 0 10 6")
-				.attr("refX", 10)
-				.attr("refY", 3)
-				.attr("markerWidth", 8)
-				.attr("markerHeight", 6)
-				.attr("orient", "auto")
-				.append("path")
-				.attr("d", "M0,0 L10,3 L0,6 Z")
-				.attr("fill", color);
+			appendArrowMarker(defs, `arrow-force-${kind}`, color);
 		}
 
 		const g = svg.append("g");
+		this.setupZoom(svg, g);
 
-		// Zoom
-		const zoom = d3
-			.zoom<SVGSVGElement, unknown>()
-			.scaleExtent([0.2, 4])
-			.on("zoom", (event) => {
-				g.attr("transform", event.transform);
-			});
-		svg.call(zoom);
-		this.zoom = zoom;
-		this.svgSelection = svg;
-
-		// Edges (paths to support curved parallel edges)
 		const linkGroup = g
 			.append("g")
 			.attr("class", "links")
@@ -230,7 +109,6 @@ export class GraphCanvasForceComponent {
 			.attr("opacity", 0.7)
 			.attr("fill", "none");
 
-		// Edge labels
 		const edgeLabelGroup = g
 			.append("g")
 			.attr("class", "edge-labels")
@@ -243,11 +121,10 @@ export class GraphCanvasForceComponent {
 			.attr("text-anchor", "middle")
 			.attr("dy", -4);
 
-		// Node groups
 		const nodeGroup = g
 			.append("g")
 			.attr("class", "nodes")
-			.selectAll<SVGGElement, SimNode>("g")
+			.selectAll<SVGGElement, ForceNode>("g")
 			.data(nodes)
 			.join("g")
 			.attr("cursor", "pointer")
@@ -255,72 +132,39 @@ export class GraphCanvasForceComponent {
 				this.nodeClick.emit(d.original);
 			});
 
-		// Endpoint rectangles
-		nodeGroup
-			.filter((d) => d.type === "endpoint")
-			.append("rect")
-			.attr("width", (d) => nodeWidth(d))
-			.attr("height", (d) => nodeHeight(d))
-			.attr("rx", 4)
-			.attr("ry", 4)
-			.attr("fill", (d) => METHOD_COLORS[d.method ?? "GET"] ?? "#6b7280")
-			.attr("opacity", 0.9);
+		appendEndpointShapes(nodeGroup);
 
-		// Endpoint text
-		nodeGroup
-			.filter((d) => d.type === "endpoint")
-			.append("text")
-			.text((d) => d.label)
-			.attr("x", (d) => nodeWidth(d) / 2)
-			.attr("y", (d) => nodeHeight(d) / 2)
-			.attr("text-anchor", "middle")
-			.attr("dominant-baseline", "central")
-			.attr("fill", "var(--graph-endpoint-text)")
-			.attr("font-size", 11)
-			.attr("font-family", "monospace")
-			.attr("font-weight", 600);
-
-		// Tooltip for truncated endpoint labels
-		nodeGroup
-			.filter((d) => d.type === "endpoint" && d.label !== d.fullLabel)
-			.append("title")
-			.text((d) => d.fullLabel);
-
-		// Schema rectangles (UML class style)
 		const schemaNodes = nodeGroup.filter((d) => d.type === "schema");
 
-		// Schema header background
 		schemaNodes
 			.append("rect")
-			.attr("width", (d) => nodeWidth(d))
-			.attr("height", (d) => nodeHeight(d))
+			.attr("width", (d) => d.width)
+			.attr("height", (d) => d.height)
 			.attr("rx", 3)
 			.attr("ry", 3)
 			.attr("fill", SCHEMA_FILL)
 			.attr("stroke", SCHEMA_STROKE)
 			.attr("stroke-width", 1.5);
 
-		// Schema name
 		schemaNodes
 			.append("text")
 			.text((d) => d.label)
-			.attr("x", (d) => nodeWidth(d) / 2)
-			.attr("y", (d) => nodeHeight(d) / 2)
+			.attr("x", (d) => d.width / 2)
+			.attr("y", (d) => d.height / 2)
 			.attr("text-anchor", "middle")
 			.attr("dominant-baseline", "central")
 			.attr("fill", "var(--graph-text)")
 			.attr("font-size", 12)
 			.attr("font-weight", 700);
 
-		// Tooltip for truncated schema labels
 		schemaNodes
 			.filter((d) => d.label !== d.fullLabel)
 			.append("title")
 			.text((d) => d.fullLabel);
 
-		// Drag behavior — low alphaTarget to minimize drift of unconnected subgraphs
+		// Low alphaTarget while dragging minimizes drift of unconnected subgraphs.
 		const drag = d3
-			.drag<SVGGElement, SimNode>()
+			.drag<SVGGElement, ForceNode>()
 			.on("start", (event, d) => {
 				if (!event.active) simulation.alphaTarget(0.05).restart();
 				d.fx = d.x;
@@ -338,16 +182,16 @@ export class GraphCanvasForceComponent {
 
 		nodeGroup.call(drag);
 
-		// Force simulation — high velocityDecay dampens drift of unconnected subgraphs.
-		// forceX/forceY with low strength replace forceCenter to avoid pulling
-		// disconnected clusters toward the center during drag.
+		// High velocityDecay dampens drift of unconnected subgraphs; forceX/forceY
+		// at low strength replace forceCenter so disconnected clusters aren't pulled
+		// toward the center during drag.
 		const simulation = d3
-			.forceSimulation(nodes)
+			.forceSimulation<ForceNode, SimLink>(nodes)
 			.velocityDecay(0.7)
 			.force(
 				"link",
 				d3
-					.forceLink<SimNode, SimLink>(links)
+					.forceLink<ForceNode, SimLink>(links)
 					.id((d) => d.id)
 					.distance(160),
 			)
@@ -357,24 +201,22 @@ export class GraphCanvasForceComponent {
 			.force(
 				"collision",
 				d3
-					.forceCollide<SimNode>()
+					.forceCollide<ForceNode>()
 					.radius((d) => Math.max(d.width, d.height) / 2 + 10),
 			)
 			.on("tick", () => {
-				// Update link paths — curved for parallel edges, straight otherwise
 				linkGroup.attr("d", (d) => {
-					const src = d.source as SimNode;
-					const tgt = d.target as SimNode;
-					const x1 = (src.x ?? 0) + nodeWidth(src) / 2;
-					const y1 = (src.y ?? 0) + nodeHeight(src) / 2;
-					const x2 = (tgt.x ?? 0) + nodeWidth(tgt) / 2;
-					const y2 = (tgt.y ?? 0) + nodeHeight(tgt) / 2;
+					const src = d.source as ForceNode;
+					const tgt = d.target as ForceNode;
+					const x1 = (src.x ?? 0) + src.width / 2;
+					const y1 = (src.y ?? 0) + src.height / 2;
+					const x2 = (tgt.x ?? 0) + tgt.width / 2;
+					const y2 = (tgt.y ?? 0) + tgt.height / 2;
 
 					if (d.curveOffset === 0) {
 						return `M${x1},${y1} L${x2},${y2}`;
 					}
 
-					// Perpendicular offset for the quadratic control point
 					const dx = x2 - x1;
 					const dy = y2 - y1;
 					const len = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -385,38 +227,32 @@ export class GraphCanvasForceComponent {
 					return `M${x1},${y1} Q${cx},${cy} ${x2},${y2}`;
 				});
 
-				// Edge labels at midpoint (offset along curve for parallel edges)
 				edgeLabelGroup
 					.attr("x", (d) => {
-						const src = d.source as SimNode;
-						const tgt = d.target as SimNode;
-						const x1 = (src.x ?? 0) + nodeWidth(src) / 2;
-						const x2 = (tgt.x ?? 0) + nodeWidth(tgt) / 2;
+						const src = d.source as ForceNode;
+						const tgt = d.target as ForceNode;
+						const x1 = (src.x ?? 0) + src.width / 2;
+						const x2 = (tgt.x ?? 0) + tgt.width / 2;
 						if (d.curveOffset === 0) return (x1 + x2) / 2;
 						const dx = x2 - x1;
 						const dy =
-							(tgt.y ?? 0) +
-							nodeHeight(tgt) / 2 -
-							((src.y ?? 0) + nodeHeight(src) / 2);
+							(tgt.y ?? 0) + tgt.height / 2 - ((src.y ?? 0) + src.height / 2);
 						const len = Math.sqrt(dx * dx + dy * dy) || 1;
 						return (x1 + x2) / 2 + (-dy / len) * d.curveOffset;
 					})
 					.attr("y", (d) => {
-						const src = d.source as SimNode;
-						const tgt = d.target as SimNode;
-						const y1 = (src.y ?? 0) + nodeHeight(src) / 2;
-						const y2 = (tgt.y ?? 0) + nodeHeight(tgt) / 2;
+						const src = d.source as ForceNode;
+						const tgt = d.target as ForceNode;
+						const y1 = (src.y ?? 0) + src.height / 2;
+						const y2 = (tgt.y ?? 0) + tgt.height / 2;
 						if (d.curveOffset === 0) return (y1 + y2) / 2;
 						const dx =
-							(tgt.x ?? 0) +
-							nodeWidth(tgt) / 2 -
-							((src.x ?? 0) + nodeWidth(src) / 2);
+							(tgt.x ?? 0) + tgt.width / 2 - ((src.x ?? 0) + src.width / 2);
 						const dy = y2 - y1;
 						const len = Math.sqrt(dx * dx + dy * dy) || 1;
 						return (y1 + y2) / 2 + (dx / len) * d.curveOffset;
 					});
 
-				// Node positions (translate to top-left corner)
 				nodeGroup.attr(
 					"transform",
 					(d) => `translate(${d.x ?? 0},${d.y ?? 0})`,
@@ -424,35 +260,5 @@ export class GraphCanvasForceComponent {
 			});
 
 		this.simulation = simulation;
-	}
-
-	onZoomIn(): void {
-		if (this.zoom && this.svgSelection) {
-			this.svgSelection.transition().duration(300).call(this.zoom.scaleBy, 1.3);
-		}
-	}
-
-	onZoomOut(): void {
-		if (this.zoom && this.svgSelection) {
-			this.svgSelection.transition().duration(300).call(this.zoom.scaleBy, 0.7);
-		}
-	}
-
-	onResetZoom(): void {
-		if (this.zoom && this.svgSelection) {
-			this.svgSelection
-				.transition()
-				.duration(300)
-				.call(this.zoom.transform, d3.zoomIdentity);
-		}
-	}
-
-	onFullscreen(): void {
-		const el = this.containerRef().nativeElement;
-		if (document.fullscreenElement) {
-			document.exitFullscreen();
-		} else {
-			el.requestFullscreen();
-		}
 	}
 }

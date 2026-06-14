@@ -56,7 +56,6 @@ func extract(data []byte, raw map[string]any) (*ParseResult, error) {
 	}, nil
 }
 
-// countEndpoints counts all HTTP operations across all paths.
 func countEndpoints(doc *openapi3.T) int {
 	if doc.Paths == nil {
 		return 0
